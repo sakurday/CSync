@@ -1,0 +1,5 @@
+-keep class io.csync.app.ClipboardUserService { *; }
+-keep class io.csync.app.IClipboardBridge$Stub { *; }
+-keep class io.csync.app.IClipListener$Stub { *; }
+-keep class android.content.IClipboard$Stub { *; }
+-keep class android.content.IOnPrimaryClipChangedListener$Stub { *; }

@@ -1,0 +1,11 @@
+/target/
+/.build/
+**/.build/
+/dist/
+**/build/
+**/.gradle/
+/android/local.properties
+*.keystore
+*.jks
+*.log
+.idea/
