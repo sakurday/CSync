@@ -2,6 +2,8 @@
 
 [简体中文](./README/zh_cn.md)
 
+> Currently, only Simplified Chinese is supported. English support is coming soon.
+
 Synchronize your clipboard in real time between Windows and Android devices.
 
 CSync is very small and only has the function of syncing the clipboard.
