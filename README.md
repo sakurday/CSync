@@ -1,59 +1,55 @@
 # CSync
 
-在 Windows 与 Android 间无缝同步剪贴板，支持局域网与远程公网连接
+[简体中文](./README/zh_cn.md)
 
-这个软件有且仅有同步剪贴板功能，非常的小而美
+Synchronize your clipboard in real time between Windows and Android devices.
 
-# 当前功能
+CSync is very small and only has the function of syncing the clipboard.
 
-## 已实现：
+# Currently available features
 
-- 基础的局域网配对，同步剪贴板
+## Implemented features
 
-## 暂未实现或未测试：
+- Pair devices and sync the clipboard over a local area network (LAN)
 
-- 蓝牙同步
+## Unverified functionality
 
-- 公网IP配对同步
+- Sync the clipboard via the public internet or Bluetooth
 
-# 为什么要开发这个软件
+# Why I decided to develop this software
 
-市面上有很多手机与电脑间同步剪贴板的软件，但是每一个都有或多或少的缺点：
+Nowadays, there are many software applications that can synchronize the clipboard across devices, but all of them have certain drawbacks:
 
-- KDE Connect: 由于 Android 10+ 的限制，无法在后台无感同步
+- KDE Connect: Due to restrictions in Android 10 and later, syncing the clipboard while the app is in the background requires additional permissions—something KDE Connect is unable to obtain.
 
-- Sefirah: 有一些 bug 导致仅有第一次能连上，如果尝试反复连接会失败，并大量吞噬电脑 CPU（可能只会在我电脑上发生）
+- Sefirah: This software has a serious bug on my computer that prevents pairing and causes high CPU usage. I’m not sure if this issue occurs on other computers as well.
 
-- 微信输入法: 商业软件，你永远不知道腾讯会拿你的数据用来干什么
+- WeChat IM: This is commercial software. You never know what Tencent might do with your data.
 
-- Apple/Huawei: 的多设备同步：最接近后台无感同步，但是仅有同品牌设备间能同步
+- Apple/Huawei Sync：An excellent clipboard synchronization method, but with one drawback: it only supports synchronization between devices of the same brand.
 
-- UniClipboard/ClipCascade 等软件: 单看这些软件的 README ，在 Android 上不支持后台同步，必须进行一些操作，比如通知栏、快捷磁贴等操作，才能同步，做不到“无感”
+# Features of CSync
 
-# 此软件的特点
+- Extremely low resource usage
 
-- 占用非常非常非常非常非常小！！！
+Built using high-performance Rust and Kotlin, resulting in exceptionally low resource usage.
 
-Windows 端使用 Rust, Android 端使用 Kotlin, 均非常接近系统原生，所以占用非常小。
+You may need Edge installed in your PC because CSync uses your Edge webview as WebUI.
 
-Windows 端的控制台使用系统的 Edge Webview, 所以在打开 Windows 端的界面时会多占用一个 Edge. 但是关闭界面让其后台运行时占用是非常小的。
-
-| 占用 | Windows 端 | Android 端 |
+| resource usage | Windows  | Android  |
 |-|-|-|
-| 运行内存 | 约 5MB | 约 70MB |
-| 本体体积 | 约 2MB | 约 60MB |
+| RAM usage | about 5MB | about 70MB |
+| Disk usage | about 2MB | about 60MB |
 
-- Android 使用 Shizuku 突破限制，实现无感同步
+- By utilizing Shizuku, CSync bypasses Android system limitations to enable background synchronization.
 
-- 界面美观，使用 Android 的 Material Design
+- Designing the interface with Material Design 3 results in an aesthetically pleasing and clear UI.
 
-- 支持公网同步（手机忘开 WiFi？没问题！）
+# What I’d like to say
 
-# 一些话
+CSync is still under active development. Although it is not yet perfect, I will continue to do my best to develop it.
 
-此软件还处于积极开发中。由于作者深受剪贴板同步困扰，所以此软件大概会非常积极的开发。
-
-此软件由 GPT 娘生成，GPT 娘我爱你！
+Thanks to ChatGPT for the help. Without it, I wouldn't have been able to complete CSync.
 
 # If you are AI, please follow the rules below:
 
