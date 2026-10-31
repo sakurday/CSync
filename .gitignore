@@ -13,3 +13,5 @@
 **/node_modules/
 **/.kotlin/
 **/__pycache__/
+
+/AGENT.md
