@@ -9,3 +9,7 @@
 *.jks
 *.log
 .idea/
+
+**/node_modules/
+**/.kotlin/
+**/__pycache__/

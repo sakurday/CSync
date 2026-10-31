@@ -7,6 +7,8 @@ import android.content.pm.ServiceInfo
 import android.os.*
 import android.net.ConnectivityManager
 import android.net.Network
+import android.net.LinkProperties
+import java.io.Closeable
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import org.json.JSONObject
@@ -26,12 +28,42 @@ class SyncService : Service() {
     private val sequence = AtomicLong(0)
     private val pending = ConcurrentHashMap<String, Long>()
     private val networkChanged = Channel<Unit>(Channel.CONFLATED)
+    private val networkGeneration = AtomicLong(0)
+    private val connectingSocket = AtomicReference<Closeable?>()
     private val connectivity by lazy { getSystemService(ConnectivityManager::class.java) }
-    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
-        override fun onAvailable(network: Network) { networkChanged.trySend(Unit) }
-        override fun onLost(network: Network) {
+    private var defaultNetwork: Network? = null // Accessed only on the main handler.
+    private var networkRoute: String? = null
+    private val networkSettled = Runnable {
+        if (!destroyed) {
+            networkGeneration.incrementAndGet()
+            runCatching { connectingSocket.getAndSet(null)?.close() }
             link.get()?.takeUnless { it.bluetooth }?.close()
             networkChanged.trySend(Unit)
+        }
+    }
+    private fun scheduleNetworkRetry() {
+        main.removeCallbacks(networkSettled)
+        main.postDelayed(networkSettled, 750)
+    }
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            if (defaultNetwork == network) return
+            defaultNetwork = network
+            networkRoute = null
+            scheduleNetworkRetry()
+        }
+        override fun onLinkPropertiesChanged(network: Network, properties: LinkProperties) {
+            if (defaultNetwork != network) return
+            val route = "${properties.interfaceName}|${properties.linkAddresses.sortedBy { it.toString() }}|${properties.routes.sortedBy { it.toString() }}"
+            if (route == networkRoute) return
+            networkRoute = route
+            scheduleNetworkRetry()
+        }
+        override fun onLost(network: Network) {
+            if (defaultNetwork != network) return
+            defaultNetwork = null
+            networkRoute = null
+            scheduleNetworkRetry()
         }
     }
     @Volatile private var bridge: IClipboardBridge? = null
@@ -78,6 +110,7 @@ class SyncService : Service() {
     override fun onCreate() {
         super.onCreate()
         settings = Settings(this)
+        settings.activeHostId = ""
         settings.shizukuStatus = "正在连接 Shizuku"
         identity = DeviceIdentity()
         getSystemService(NotificationManager::class.java).createNotificationChannel(
@@ -85,7 +118,7 @@ class SyncService : Service() {
         startForeground(NOTIFICATION, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
         Shizuku.addBinderReceivedListenerSticky(received)
         Shizuku.addBinderDeadListener(dead)
-        connectivity.registerDefaultNetworkCallback(networkCallback)
+        connectivity.registerDefaultNetworkCallback(networkCallback, main)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -97,6 +130,7 @@ class SyncService : Service() {
         bindBridge()
         if (network == null || network?.isActive != true || intent?.action == ACTION_RECONNECT) {
             link.getAndSet(null)?.close()
+            connectingSocket.getAndSet(null)?.close()
             outgoing.getAndSet(null)?.close()
             val previous = network
             previous?.cancel()
@@ -118,43 +152,87 @@ class SyncService : Service() {
     }
 
     private suspend fun connectLoop() {
-        var failures = 0
+        val backoff = ReconnectBackoff()
         while (currentCoroutineContext().isActive && settings.enabled) {
-            status("正在连接 ${settings.serverName}")
-            var current: Link? = null
-            for (host in settings.hosts) {
-                currentCoroutineContext().ensureActive()
-                current = runCatching { Transport.tcp(host, settings.port, identity, settings.pin) }.getOrNull()
-                if (current != null) break
+            if (networkChanged.tryReceive().isSuccess) backoff.reset()
+            val generation = networkGeneration.get()
+            val profiles = settings.profiles
+            // No TCP attempts while offline; Bluetooth remains an optional fallback.
+            var selected = if (connectivity.activeNetwork != null) connectProfiles(profiles, false, generation) else null
+            if (selected == null && settings.bluetoothEnabled && generation == networkGeneration.get()) {
+                selected = connectProfiles(profiles.filter { it.bluetoothAddress.isNotEmpty() }, true, generation)
             }
-            if (current == null && settings.bluetoothEnabled && settings.bluetoothAddress.isNotEmpty()) {
-                current = runCatching { Transport.bluetooth(this, settings.bluetoothAddress, identity, settings.pin) }.getOrNull()
+            if (generation != networkGeneration.get()) {
+                selected?.second?.close()
+                backoff.reset()
+                continue
             }
+            val current = selected?.second
             if (current == null) {
                 status("连接失败；检查电脑、地址、防火墙或配对状态")
             } else {
                 val connected = current
                 if (!currentCoroutineContext().isActive) { connected.close(); break }
                 link.set(connected)
-                try { session(connected); failures = 0 }
+                // Catch a network callback racing with publication of the new TCP link.
+                if (!connected.bluetooth && generation != networkGeneration.get()) connected.close()
+                val sessionStarted = SystemClock.elapsedRealtime()
+                try {
+                    settings.activeHostId = selected!!.first.id
+                    session(connected)
+                }
                 catch (cancel: CancellationException) { throw cancel }
                 catch (_: Exception) { status("连接中断，正在恢复") }
                 finally {
+                    backoff.sessionEnded(SystemClock.elapsedRealtime() - sessionStarted)
                     outgoing.getAndSet(null)?.close()
                     pending.clear()
+                    settings.activeHostId = ""
                     if (link.compareAndSet(connected, null)) connected.close() else connected.close()
                 }
             }
-            failures = (failures + 1).coerceAtMost(6)
-            val delayMs = (1000L shl (failures - 1)).coerceAtMost(30000L) + kotlin.random.Random.nextLong(0, 750)
-            withTimeoutOrNull(delayMs) { networkChanged.receive() }
+            if (connectivity.activeNetwork == null && !settings.bluetoothEnabled) {
+                status("等待网络恢复")
+                awaitReconnect(networkChanged, null) // Event-driven when offline; no periodic socket attempts.
+                backoff.reset()
+            } else {
+                val delayMs = backoff.nextDelayMs()
+                status("连接已断开，约 ${delayMs / 1000} 秒后重试；网络变化时立即重试")
+                if (awaitReconnect(networkChanged, delayMs)) backoff.reset()
+            }
         }
     }
 
+    private suspend fun connectProfiles(profiles: List<HostProfile>, bluetooth: Boolean, generation: Long): Pair<HostProfile, Link>? {
+        for (profile in profiles) {
+            currentCoroutineContext().ensureActive()
+            if (generation != networkGeneration.get()) break
+            status(if (bluetooth) "正在尝试蓝牙 · ${profile.name}" else "正在连接 ${profile.name} · ${profile.host}")
+            try { return profile to connect(profile, bluetooth, generation) }
+            catch (cancel: CancellationException) { throw cancel }
+            catch (_: Exception) { /* Try the next host only while this network is current. */ }
+        }
+        return null
+    }
+
+    private suspend fun connect(profile: HostProfile, bluetooth: Boolean, generation: Long): Link {
+        val context = currentCoroutineContext()
+        val opened: (Closeable) -> Unit = { socket ->
+            connectingSocket.set(socket)
+            if (!context.isActive || generation != networkGeneration.get()) socket.close()
+        }
+        var current: Link? = null
+        try {
+            current = if (bluetooth) Transport.bluetooth(this, profile.bluetoothAddress, identity, profile.pin, opened)
+                else Transport.tcp(profile.host, profile.port, identity, profile.pin, opened)
+            Transport.startSession(current, profile.pin, settings.deviceName)
+            context.ensureActive()
+            return current
+        } catch (error: Exception) { current?.close(); throw error }
+        finally { connectingSocket.set(null) }
+    }
+
     private suspend fun session(current: Link): Unit = coroutineScope {
-        Protocol.write(current.output, Protocol.message("hello", "version" to Protocol.VERSION, "name" to settings.deviceName))
-        val ready = Protocol.read(current.input)
-        check(ready.optString("type") == "ready" && ready.optInt("version") == Protocol.VERSION && ready.optString("server") == settings.pin)
         val channel = Channel<JSONObject>(8)
         pending.clear()
         outgoing.set(channel)
@@ -210,7 +288,7 @@ class SyncService : Service() {
     private fun notification(): Notification {
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         fun action(request: Int, type: String): PendingIntent = PendingIntent.getService(this, request, Intent(this, SyncService::class.java).setAction(type), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        return Notification.Builder(this, CHANNEL).setSmallIcon(R.drawable.ic_sync).setContentTitle(if (settings.paused) "CSync · 已暂停" else "CSync · 剪贴板同步")
+        return Notification.Builder(this, CHANNEL).setSmallIcon(R.drawable.ic_notification).setContentTitle(if (settings.paused) "CSync · 已暂停" else "CSync · 剪贴板同步")
             .setContentText(settings.status).setStyle(Notification.BigTextStyle().bigText("${settings.status}\n${settings.shizukuStatus}"))
             .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true).setVisibility(Notification.VISIBILITY_PRIVATE)
             .addAction(Notification.Action.Builder(null, if (settings.paused) "恢复" else "暂停", action(1, ACTION_PAUSE)).build())
@@ -222,6 +300,7 @@ class SyncService : Service() {
         destroyed = true
         main.removeCallbacksAndMessages(null)
         link.getAndSet(null)?.close()
+        connectingSocket.getAndSet(null)?.close()
         outgoing.getAndSet(null)?.close()
         scope.cancel()
         Shizuku.removeBinderReceivedListener(received)

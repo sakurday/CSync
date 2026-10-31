@@ -1,0 +1,7 @@
+{
+  "name": "csync-windows-ui",
+  "private": true,
+  "scripts": {"build": "esbuild app.js --bundle --minify --format=esm --legal-comments=eof --outfile=bundle.js"},
+  "dependencies": {"@material/web": "2.5.0"},
+  "devDependencies": {"esbuild": "0.28.2"}
+}

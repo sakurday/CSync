@@ -31,3 +31,5 @@ windows-sys = { version = "0.61", features = [
   "Win32_Networking_WinSock", "Win32_Devices_Bluetooth", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_StationsAndDesktops"
   , "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis"
 ] }
+wry = { version = "0.57.1", default-features = false, features = ["os-webview"] }
+raw-window-handle = "0.6"

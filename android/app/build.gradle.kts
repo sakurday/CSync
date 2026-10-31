@@ -36,3 +36,17 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
 }
 
+// Export resolved runtime libraries for the checked-in About inventory.
+tasks.register("exportOpenSourceDependencies") {
+    doLast {
+        for (variant in listOf("debug", "release")) {
+            val target = rootProject.file("../.build/android-open-source-$variant.tsv")
+            target.parentFile.mkdirs()
+            target.writeText(configurations.getByName("${variant}RuntimeClasspath").resolvedConfiguration.resolvedArtifacts
+                .map { it.moduleVersion.id }.distinctBy { "${it.group}:${it.name}:${it.version}" }
+                .sortedBy { "${it.group}:${it.name}" }
+                .joinToString("\n") { "${it.group}\t${it.name}\t${it.version}" })
+        }
+    }
+}
+

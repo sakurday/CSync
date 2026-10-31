@@ -21,10 +21,11 @@ class Link(private val tls: TlsStreams, val label: String, val bluetooth: Boolea
 
 object Transport {
     private val deadlines = Executors.newSingleThreadScheduledExecutor { runnable -> Thread(runnable, "csync-deadlines").apply { isDaemon = true } }
-    fun tcp(host: String, port: Int, identity: DeviceIdentity, pin: String?): Link {
+    fun tcp(host: String, port: Int, identity: DeviceIdentity, pin: String?, onSocketOpened: (Closeable) -> Unit = {}): Link {
         val socket = Socket()
         val deadline = deadlines.schedule({ runCatching { socket.close() } }, 12, TimeUnit.SECONDS)
         try {
+            onSocketOpened(socket)
             socket.tcpNoDelay = true
             socket.connect(InetSocketAddress(host, port), 5000)
             socket.soTimeout = 110000
@@ -34,17 +35,27 @@ object Transport {
         finally { deadline.cancel(false) }
     }
     @SuppressLint("MissingPermission")
-    fun bluetooth(context: Context, address: String, identity: DeviceIdentity, pin: String): Link {
+    fun bluetooth(context: Context, address: String, identity: DeviceIdentity, pin: String, onSocketOpened: (Closeable) -> Unit = {}): Link {
         val adapter = context.getSystemService(BluetoothManager::class.java).adapter ?: error("设备不支持蓝牙")
         check(adapter.isEnabled) { "蓝牙未开启" }
         val socket = adapter.getRemoteDevice(address).createRfcommSocketToServiceRecord(UUID.fromString(Protocol.BT_UUID))
         val deadline = deadlines.schedule({ runCatching { socket.close() } }, 15, TimeUnit.SECONDS)
         try {
+            onSocketOpened(socket)
             socket.connect()
             return Link(TlsStreams(socket.inputStream, socket.outputStream, socket, identity.context(pin).createSSLEngine("csync.local", 0)), "蓝牙备用", true)
         } catch (error: Exception) { runCatching { socket.close() }; throw error }
         finally { deadline.cancel(false) }
     }
+    fun startSession(link: Link, pin: String, name: String) {
+        val deadline = deadlines.schedule({ runCatching { link.close() } }, 8, TimeUnit.SECONDS)
+        try {
+            Protocol.write(link.output, Protocol.message("hello", "version" to Protocol.VERSION, "name" to name))
+            val ready = Protocol.read(link.input)
+            check(ready.optString("type") == "ready" && ready.optInt("version") == Protocol.VERSION && ready.optString("server") == pin) { "同步握手失败" }
+        } finally { deadline.cancel(false) }
+    }
+
     fun pair(host: String, port: Int, identity: DeviceIdentity, name: String, confirm: (String) -> Boolean): Pair<String, String> {
         tcp(host, port, identity, null).use { link ->
             val pin = link.peerPin

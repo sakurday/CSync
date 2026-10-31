@@ -48,6 +48,7 @@ class DeviceIntegrationTest {
         // A wrong pin must fail before enrollment, leaving the real token usable.
         assertThrows(Exception::class.java) { Transport.tcp("127.0.0.1", port, identity, "0".repeat(64)).close() }
         val (pin, name) = Transport.pair(host, port, identity, settings.deviceName) { true }
+        settings.updateProfiles(emptyList()) // This isolated test must connect only to its test server.
         settings.savePair(host, port, pin, name)
         settings.paused = false
         settings.enabled = true

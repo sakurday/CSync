@@ -3,7 +3,7 @@ use crate::{
     server::{Host, UiEvent, UiSink, WAKE},
     storage::{Store, set_startup, wide},
 };
-use anyhow::{Result, ensure};
+use anyhow::{Context, Result, ensure};
 use csync_core::protocol::Clip;
 use std::{
     ptr::{null, null_mut},
@@ -17,29 +17,28 @@ use windows_sys::Win32::{
 };
 
 const TRAY: u32 = WM_APP + 10;
-const STATUS: i32 = 100;
-const PORT: i32 = 102;
-const PUBLIC: i32 = 103;
-const BT: i32 = 104;
-const STARTUP: i32 = 105;
-const SAVE: i32 = 110;
-const PAIR: i32 = 111;
 const PAUSE: i32 = 112;
-const REVOKE: i32 = 113;
 const EXIT: i32 = 114;
-const CODE: i32 = 115;
-const PEERS: i32 = 116;
-const CLOSE_PAIR: i32 = 117;
+const TRAY_TIMER: usize = 2;
 
 struct App {
     host: Arc<Host>,
     receiver: mpsc::Receiver<UiEvent>,
     clipboard: Clipboard,
-    font: HFONT,
-    title_font: HFONT,
+    webview: Option<wry::WebView>,
+    last_state: std::cell::RefCell<String>,
+    commands: mpsc::Receiver<String>,
+    command_tx: mpsc::Sender<String>,
+    pending_pair: Option<(
+        String,
+        String,
+        tokio::sync::oneshot::Sender<bool>,
+        std::time::Instant,
+    )>,
     sequence: u64,
     taskbar_created: u32,
     running_port: u16,
+    tray_registered: Option<bool>,
 }
 
 pub fn show_error(message: &str) {
@@ -60,7 +59,7 @@ pub fn run() -> Result<()> {
         if GetLastError() == ERROR_ALREADY_EXISTS {
             let existing = FindWindowW(wide("CSync.Main").as_ptr(), null());
             if !existing.is_null() {
-                ShowWindow(existing, SW_SHOW);
+                PostMessageW(existing, WM_COMMAND, 120, 0);
                 SetForegroundWindow(existing);
             }
             CloseHandle(mutex);
@@ -84,7 +83,7 @@ pub fn run() -> Result<()> {
         let class_name = wide("CSync.Main");
         class.lpszClassName = class_name.as_ptr();
         class.hCursor = LoadCursorW(null_mut(), IDC_ARROW);
-        class.hIcon = LoadIconW(null_mut(), IDI_APPLICATION);
+        class.hIcon = LoadIconW(instance, 101usize as *const u16);
         class.hbrBackground = (COLOR_WINDOW + 1) as HBRUSH;
         ensure!(
             RegisterClassW(&class) != 0,
@@ -94,7 +93,7 @@ pub fn run() -> Result<()> {
             0,
             class_name.as_ptr(),
             wide("CSync · 剪贴板同步").as_ptr(),
-            WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
+            WS_OVERLAPPEDWINDOW,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
             1000,
@@ -105,52 +104,25 @@ pub fn run() -> Result<()> {
             null(),
         );
         ensure!(!hwnd.is_null(), "cannot create application window");
-        let font = CreateFontW(
-            -18,
-            0,
-            0,
-            0,
-            400,
-            0,
-            0,
-            0,
-            DEFAULT_CHARSET as u32,
-            0,
-            0,
-            CLEARTYPE_QUALITY as u32,
-            0,
-            wide("Microsoft YaHei UI").as_ptr(),
-        );
-        let title_font = CreateFontW(
-            -30,
-            0,
-            0,
-            0,
-            600,
-            0,
-            0,
-            0,
-            DEFAULT_CHARSET as u32,
-            0,
-            0,
-            CLEARTYPE_QUALITY as u32,
-            0,
-            wide("Microsoft YaHei UI").as_ptr(),
-        );
+        let (command_tx, commands) = mpsc::channel();
         let mut app = Box::new(App {
             host: host.clone(),
             receiver,
             clipboard: Clipboard::new(hwnd)?,
-            font,
-            title_font,
+            webview: None,
+            last_state: std::cell::RefCell::new(String::new()),
+            commands,
+            command_tx,
+            pending_pair: None,
             sequence: 0,
             taskbar_created: RegisterWindowMessageW(wide("TaskbarCreated").as_ptr()),
             running_port: config.port,
+            tray_registered: None,
         });
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, app.as_mut() as *mut App as isize);
         host.ui.hwnd.store(hwnd as isize, Ordering::Relaxed);
-        build_controls(hwnd, &app);
-        notify_icon(hwnd, NIM_ADD);
+
+        restore_tray(hwnd, &mut app);
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
             .enable_all()
@@ -165,8 +137,12 @@ pub fn run() -> Result<()> {
             crate::bluetooth::start(host.clone(), runtime.handle().clone());
         }
         refresh(hwnd, &app);
-        if !std::env::args().any(|s| s == "--background") {
-            ShowWindow(hwnd, SW_SHOW);
+        if !std::env::args().any(|s| s == "--background") || app.tray_registered != Some(true) {
+            if let Err(error) = open_webview(hwnd, &mut app) {
+                show_error(&format!(
+                    "无法打开设置界面，请确认已安装 Microsoft Edge WebView2 Runtime：{error:#}"
+                ));
+            }
         }
         let mut message = std::mem::zeroed();
         while GetMessageW(&mut message, null_mut(), 0, 0) > 0 {
@@ -180,300 +156,162 @@ pub fn run() -> Result<()> {
         notify_icon(hwnd, NIM_DELETE);
         drop(app);
         DestroyWindow(hwnd);
-        DeleteObject(font);
-        DeleteObject(title_font);
+
         CloseHandle(mutex);
         runtime.shutdown_timeout(std::time::Duration::from_secs(1));
     }
     Ok(())
 }
 
-unsafe fn control(
-    hwnd: HWND,
-    class: &str,
-    text: &str,
-    style: u32,
-    x: i32,
-    y: i32,
-    w: i32,
-    h: i32,
-    id: i32,
-    font: HFONT,
-) -> HWND {
-    let child = CreateWindowExW(
-        if class == "EDIT" { WS_EX_CLIENTEDGE } else { 0 },
-        wide(class).as_ptr(),
-        wide(text).as_ptr(),
-        WS_CHILD | WS_VISIBLE | style,
-        x,
-        y,
-        w,
-        h,
-        hwnd,
-        id as usize as _,
-        GetModuleHandleW(null()),
-        null(),
-    );
-    SendMessageW(child, WM_SETFONT, font as usize, 1);
-    child
-}
-unsafe fn build_controls(hwnd: HWND, app: &App) {
-    let f = app.font;
-    let config = app.host.config.lock().unwrap();
-    control(
-        hwnd,
-        "STATIC",
-        "CSync",
-        0,
-        32,
-        24,
-        450,
-        48,
-        0,
-        app.title_font,
-    );
-    control(
-        hwnd,
-        "STATIC",
-        "手机与电脑，复制即同步。",
-        0,
-        34,
-        76,
-        540,
-        30,
-        0,
-        f,
-    );
-    control(hwnd, "STATIC", "正在启动…", 0, 34, 118, 900, 46, STATUS, f);
-    control(hwnd, "STATIC", "连接设置", 0, 34, 184, 480, 28, 0, f);
-    control(
-        hwnd,
-        "STATIC",
-        "局域网地址（自动获取）",
-        0,
-        34,
-        222,
-        500,
-        26,
-        0,
-        f,
-    );
-    control(
-        hwnd,
-        "STATIC",
-        &local_addresses().unwrap_or_default().join("、"),
-        0,
-        34,
-        254,
-        410,
-        32,
-        0,
-        f,
-    );
-    control(hwnd, "STATIC", "监听端口", 0, 34, 302, 130, 26, 0, f);
-    control(
-        hwnd,
-        "EDIT",
-        &config.port.to_string(),
-        WS_TABSTOP | ES_NUMBER as u32,
-        174,
-        296,
-        120,
-        32,
-        PORT,
-        f,
-    );
-    control(
-        hwnd,
-        "BUTTON",
-        "允许公网来源连接",
-        WS_TABSTOP | BS_AUTOCHECKBOX as u32,
-        34,
-        346,
-        410,
-        30,
-        PUBLIC,
-        f,
-    );
-    control(
-        hwnd,
-        "BUTTON",
-        "启用蓝牙备用（重启程序生效）",
-        WS_TABSTOP | BS_AUTOCHECKBOX as u32,
-        34,
-        384,
-        440,
-        30,
-        BT,
-        f,
-    );
-    control(
-        hwnd,
-        "BUTTON",
-        "登录 Windows 后静默启动",
-        WS_TABSTOP | BS_AUTOCHECKBOX as u32,
-        34,
-        422,
-        410,
-        30,
-        STARTUP,
-        f,
-    );
-    for (id, value) in [
-        (PUBLIC, config.public_access),
-        (BT, config.bluetooth),
-        (STARTUP, config.auto_start),
-    ] {
-        SendDlgItemMessageW(
-            hwnd,
-            id,
-            BM_SETCHECK,
-            if value {
-                BST_CHECKED as usize
-            } else {
-                BST_UNCHECKED as usize
-            },
-            0,
+struct WindowHandle(HWND);
+impl raw_window_handle::HasWindowHandle for WindowHandle {
+    fn window_handle(
+        &self,
+    ) -> std::result::Result<raw_window_handle::WindowHandle<'_>, raw_window_handle::HandleError>
+    {
+        let raw = raw_window_handle::Win32WindowHandle::new(
+            std::num::NonZeroIsize::new(self.0 as isize).unwrap(),
         );
-    }
-    control(
-        hwnd,
-        "BUTTON",
-        "保存设置",
-        WS_TABSTOP,
-        34,
-        474,
-        124,
-        38,
-        SAVE,
-        f,
-    );
-    control(
-        hwnd,
-        "BUTTON",
-        "暂停同步",
-        WS_TABSTOP,
-        174,
-        474,
-        124,
-        38,
-        PAUSE,
-        f,
-    );
-    control(hwnd, "STATIC", "安全配对", 0, 526, 184, 410, 28, 0, f);
-    control(
-        hwnd,
-        "STATIC",
-        "手机输入左侧地址和端口，核对校验码后确认。",
-        0,
-        526,
-        222,
-        420,
-        48,
-        0,
-        f,
-    );
-    control(
-        hwnd,
-        "BUTTON",
-        "开始配对（120 秒）",
-        WS_TABSTOP,
-        526,
-        278,
-        220,
-        38,
-        PAIR,
-        f,
-    );
-    control(
-        hwnd,
-        "BUTTON",
-        "关闭配对",
-        WS_TABSTOP,
-        762,
-        278,
-        140,
-        38,
-        CLOSE_PAIR,
-        f,
-    );
-    control(hwnd, "STATIC", "配对未开启", 0, 526, 340, 410, 40, CODE, f);
-    control(
-        hwnd,
-        "STATIC",
-        "尚无已配对设备",
-        0,
-        34,
-        548,
-        440,
-        102,
-        PEERS,
-        f,
-    );
-    control(
-        hwnd,
-        "BUTTON",
-        "撤销全部设备",
-        WS_TABSTOP,
-        34,
-        656,
-        160,
-        36,
-        REVOKE,
-        f,
-    );
-    control(
-        hwnd,
-        "STATIC",
-        "仅同步文本 · 默认不保存历史 · 关闭窗口后继续在托盘运行",
-        0,
-        34,
-        720,
-        900,
-        28,
-        0,
-        f,
-    );
-}
-
-unsafe fn refresh(hwnd: HWND, app: &App) {
-    let count = app.host.active.lock().unwrap().len();
-    let state = if app.host.paused.load(Ordering::Relaxed) {
-        "已暂停"
-    } else {
-        "同步已开启"
-    };
-    let status = format!(
-        "{state}  ·  在线设备 {count}  ·  {}",
-        app.host.status.lock().unwrap()
-    );
-    SetDlgItemTextW(hwnd, STATUS, wide(&status).as_ptr());
-    let config = app.host.config.lock().unwrap();
-    let peers = if config.peers.is_empty() {
-        "尚无已配对设备".into()
-    } else {
-        format!(
-            "已信任 {} 台设备：\r\n{}",
-            config.peers.len(),
-            config
-                .peers
-                .values()
-                .cloned()
-                .collect::<Vec<_>>()
-                .join("、")
-        )
-    };
-    SetDlgItemTextW(hwnd, PEERS, wide(&peers).as_ptr());
-    SetDlgItemTextW(
-        hwnd,
-        PAUSE,
-        wide(if app.host.paused.load(Ordering::Relaxed) {
-            "恢复同步"
-        } else {
-            "暂停同步"
+        Ok(unsafe {
+            raw_window_handle::WindowHandle::borrow_raw(raw_window_handle::RawWindowHandle::Win32(
+                raw,
+            ))
         })
-        .as_ptr(),
-    );
+    }
+}
+unsafe fn open_webview(hwnd: HWND, app: &mut App) -> Result<()> {
+    if app.webview.is_none() {
+        let mut context = wry::WebContext::new(Some(app.host.store.directory.join("webview")));
+        let tx = app.command_tx.clone();
+        let target = hwnd as isize;
+        let mut rect = RECT::default();
+        GetClientRect(hwnd, &mut rect);
+        let html = include_str!("../web/index.html")
+            .replace("/* MATERIAL_BUNDLE */", include_str!("../web/bundle.js"))
+            .replace(
+                "<!-- OPEN_SOURCE_LIBRARIES -->",
+                include_str!("../web/open-source.html"),
+            )
+            .replace(
+                "APP_ICON_BASE64",
+                &base64::Engine::encode(
+                    &base64::engine::general_purpose::STANDARD,
+                    include_bytes!("../../../icon_512.png"),
+                ),
+            );
+        let page_url = format!(
+            "data:text/html;charset=utf-8;base64,{}",
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, html.as_bytes())
+        );
+        let view = wry::WebViewBuilder::new_with_web_context(&mut context)
+            .with_html(html)
+            .with_bounds(wry::Rect {
+                position: wry::dpi::PhysicalPosition::new(0, 0).into(),
+                size: wry::dpi::PhysicalSize::new(rect.right, rect.bottom).into(),
+            })
+            .with_devtools(false)
+            .with_new_window_req_handler(|_, _| wry::NewWindowResponse::Deny)
+            .with_navigation_handler(move |url| url == "about:blank" || url == page_url)
+            .with_ipc_handler(move |request| {
+                if request.body().len() < 4096 {
+                    let _ = tx.send(request.body().clone());
+                    PostMessageW(target as HWND, WAKE, 0, 0);
+                }
+            })
+            .build_as_child(&WindowHandle(hwnd))
+            .context("WebView2 初始化失败")?;
+        app.last_state.borrow_mut().clear();
+        app.webview = Some(view);
+    }
+    SetTimer(hwnd, 1, 1000, None);
+    ShowWindow(hwnd, SW_SHOW);
+    SetForegroundWindow(hwnd);
+    Ok(())
+}
+unsafe fn refresh(_hwnd: HWND, app: &App) {
+    if let Some(view) = &app.webview {
+        let config = app.host.config.lock().unwrap();
+        let pairing = app
+            .pending_pair
+            .as_ref()
+            .map(|(code, name, _, _)| serde_json::json!({"code":code,"name":name}));
+        let state = serde_json::json!({
+            "version": env!("CARGO_PKG_VERSION"),
+            "paused": app.host.paused.load(Ordering::Relaxed),
+            "trayAvailable": app.tray_registered == Some(true),
+            "status": *app.host.status.lock().unwrap(),
+            "online": app.host.active.lock().unwrap().len(),
+            "peers": config.peers.values().collect::<Vec<_>>(),
+            "port": config.port, "runningPort": app.running_port,
+            "public_access": config.public_access, "bluetooth": config.bluetooth,
+            "auto_start": config.auto_start,
+            "addresses": local_addresses().unwrap_or_default(),
+            "pairingOpen": app.host.trust.lock().unwrap().pairing_open(),
+            "pairing": pairing,
+        });
+        let serialized = state.to_string();
+        if *app.last_state.borrow() == serialized {
+            return;
+        }
+        *app.last_state.borrow_mut() = serialized;
+        let _ = view.evaluate_script(&format!(
+            "window.updateState && window.updateState({state})"
+        ));
+    }
+}
+unsafe fn command(hwnd: HWND, app: &mut App, body: &str) -> Result<()> {
+    let value: serde_json::Value = serde_json::from_str(body)?;
+    match value["action"].as_str().unwrap_or("") {
+        "ready" => {
+            app.last_state.borrow_mut().clear();
+        }
+        "quit" => PostQuitMessage(0),
+        "pause" => {
+            app.host.paused.fetch_xor(true, Ordering::Relaxed);
+        }
+        "pair" => {
+            begin_pairing(hwnd, app)?;
+        }
+        "closePair" => {
+            app.host.trust.lock().unwrap().close_pairing();
+        }
+        "confirmPair" => {
+            if let Some((_, _, reply, until)) = app.pending_pair.take() {
+                let _ = reply.send(
+                    value["approved"].as_bool().unwrap_or(false) && until.elapsed().as_secs() < 55,
+                );
+            }
+        }
+        "revoke" => {
+            app.host.revoke_all()?;
+        }
+        "save" => {
+            let mut config = app.host.config.lock().unwrap();
+            let mut next = config.clone();
+            let port = value["port"]
+                .as_u64()
+                .filter(|p| *p > 0 && *p <= 65535)
+                .ok_or_else(|| anyhow::anyhow!("端口范围为 1–65535"))?;
+            next.port = port as u16;
+            next.public_access = value["public_access"].as_bool().unwrap_or(false);
+            next.bluetooth = value["bluetooth"].as_bool().unwrap_or(false);
+            next.auto_start = value["auto_start"].as_bool().unwrap_or(false);
+            let restart = next.port != config.port || next.bluetooth != config.bluetooth;
+            set_startup(next.auto_start)?;
+            app.host.store.save(&next)?;
+            *config = next;
+            drop(config);
+            app.host.trust.lock().unwrap().close_pairing();
+            app.host.status(if restart {
+                "设置已保存；端口和蓝牙更改请退出后重新启动"
+            } else {
+                "设置已保存"
+            });
+        }
+        _ => anyhow::bail!("未知操作"),
+    }
+    refresh(hwnd, app);
+    Ok(())
 }
 
 unsafe extern "system" fn window_proc(hwnd: HWND, message: u32, w: WPARAM, l: LPARAM) -> LRESULT {
@@ -483,12 +321,22 @@ unsafe extern "system" fn window_proc(hwnd: HWND, message: u32, w: WPARAM, l: LP
     }
     let app = &mut *ptr;
     if message == app.taskbar_created {
-        notify_icon(hwnd, NIM_ADD);
+        restore_tray(hwnd, app);
         return 0;
     }
     match message {
         WM_CLOSE => {
+            restore_tray(hwnd, app);
+            if app.tray_registered != Some(true) {
+                PostQuitMessage(0);
+                return 0;
+            }
             ShowWindow(hwnd, SW_HIDE);
+            app.webview.take();
+            KillTimer(hwnd, 1);
+            if let Some((_, _, reply, _)) = app.pending_pair.take() {
+                let _ = reply.send(false);
+            }
             0
         }
         WM_QUERYENDSESSION => 1,
@@ -518,19 +366,14 @@ unsafe extern "system" fn window_proc(hwnd: HWND, message: u32, w: WPARAM, l: LP
                         *app.host.status.lock().unwrap() = status;
                     }
                     UiEvent::Pair { pin, name, reply } => {
-                        clear_pairing(hwnd, app);
-                        let message = format!(
-                            "允许这台手机同步剪贴板？\n\n设备：{name}\n校验码：{}\n\n请确认手机上显示相同的校验码。",
-                            &csync_core::protocol::text_hash(&format!("{}:{pin}", app.host.id))
+                        let code =
+                            csync_core::protocol::text_hash(&format!("{}:{pin}", app.host.id))
                                 [..12]
-                        );
-                        let yes = MessageBoxW(
-                            hwnd,
-                            wide(&message).as_ptr(),
-                            wide("确认设备配对").as_ptr(),
-                            MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2,
-                        ) == IDYES;
-                        let _ = reply.send(yes);
+                                .to_string();
+                        app.pending_pair = Some((code, name, reply, std::time::Instant::now()));
+                        if let Err(error) = open_webview(hwnd, app) {
+                            show_error(&error.to_string());
+                        }
                     }
                     UiEvent::Remote { clip, reply } => {
                         let applied = !app.host.paused.load(Ordering::Relaxed)
@@ -542,60 +385,71 @@ unsafe extern "system" fn window_proc(hwnd: HWND, message: u32, w: WPARAM, l: LP
                     }
                 }
             }
+            while let Ok(body) = app.commands.try_recv() {
+                if let Err(error) = command(hwnd, app, &body) {
+                    app.host.status(error.to_string());
+                }
+            }
             refresh(hwnd, app);
             0
         }
+        WM_TIMER if w == TRAY_TIMER => {
+            restore_tray(hwnd, app);
+            0
+        }
         WM_TIMER => {
-            if !app.host.trust.lock().unwrap().pairing_open() {
-                clear_pairing(hwnd, app);
+            if app
+                .pending_pair
+                .as_ref()
+                .is_some_and(|(_, _, reply, start)| {
+                    reply.is_closed() || start.elapsed().as_secs() >= 55
+                })
+            {
+                if let Some((_, _, reply, _)) = app.pending_pair.take() {
+                    let _ = reply.send(false);
+                }
+            }
+            refresh(hwnd, app);
+            0
+        }
+        WM_GETMINMAXINFO => {
+            let info = &mut *(l as *mut MINMAXINFO);
+            info.ptMinTrackSize = POINT { x: 640, y: 580 };
+            0
+        }
+        WM_SIZE => {
+            if let Some(view) = &app.webview {
+                let mut rect = RECT::default();
+                GetClientRect(hwnd, &mut rect);
+                let _ = view.set_bounds(wry::Rect {
+                    position: wry::dpi::PhysicalPosition::new(0, 0).into(),
+                    size: wry::dpi::PhysicalSize::new(rect.right, rect.bottom).into(),
+                });
             }
             0
         }
         WM_COMMAND => {
-            let id = (w & 0xffff) as i32;
-            match id {
-                SAVE => {
-                    if let Err(e) = save_settings(hwnd, app) {
-                        show_error(&e.to_string());
-                    }
-                }
-                PAIR => {
-                    if let Err(e) = begin_pairing(hwnd, app) {
-                        show_error(&e.to_string());
-                    }
-                }
-                CLOSE_PAIR => {
-                    app.host.trust.lock().unwrap().close_pairing();
-                    clear_pairing(hwnd, app);
-                }
+            match (w & 0xffff) as i32 {
                 PAUSE => {
                     app.host.paused.fetch_xor(true, Ordering::Relaxed);
                     refresh(hwnd, app);
                 }
-                REVOKE => {
-                    if MessageBoxW(
-                        hwnd,
-                        wide("撤销所有设备？现有连接将断开，需要重新配对。").as_ptr(),
-                        wide("CSync").as_ptr(),
-                        MB_YESNO | MB_DEFBUTTON2,
-                    ) == IDYES
-                    {
-                        if let Err(e) = app.host.revoke_all() {
-                            show_error(&e.to_string());
-                        }
-                        clear_pairing(hwnd, app);
-                        refresh(hwnd, app);
+                EXIT => PostQuitMessage(0),
+                120 => {
+                    restore_tray(hwnd, app);
+                    if let Err(e) = open_webview(hwnd, app) {
+                        show_error(&e.to_string());
                     }
                 }
-                EXIT => PostQuitMessage(0),
                 _ => {}
             }
             0
         }
         TRAY => {
             if l as u32 == WM_LBUTTONDBLCLK {
-                ShowWindow(hwnd, SW_SHOW);
-                SetForegroundWindow(hwnd);
+                if let Err(e) = open_webview(hwnd, app) {
+                    show_error(&e.to_string());
+                }
             }
             if l as u32 == WM_RBUTTONUP {
                 let menu = CreatePopupMenu();
@@ -622,7 +476,9 @@ unsafe extern "system" fn window_proc(hwnd: HWND, message: u32, w: WPARAM, l: LP
                 );
                 DestroyMenu(menu);
                 if selected == 120 {
-                    ShowWindow(hwnd, SW_SHOW);
+                    if let Err(e) = open_webview(hwnd, app) {
+                        show_error(&e.to_string());
+                    }
                 } else if selected != 0 {
                     PostMessageW(hwnd, WM_COMMAND, selected as usize, 0);
                 }
@@ -643,54 +499,12 @@ unsafe extern "system" fn window_proc(hwnd: HWND, message: u32, w: WPARAM, l: LP
     }
 }
 
-unsafe fn text(hwnd: HWND, id: i32) -> String {
-    let child = GetDlgItem(hwnd, id);
-    let len = GetWindowTextLengthW(child).min(4096) as usize;
-    let mut buffer = vec![0u16; len + 1];
-    GetWindowTextW(child, buffer.as_mut_ptr(), buffer.len() as i32);
-    String::from_utf16_lossy(&buffer[..len])
-}
-unsafe fn checked(hwnd: HWND, id: i32) -> bool {
-    SendDlgItemMessageW(hwnd, id, BM_GETCHECK, 0, 0) == BST_CHECKED as isize
-}
-
-unsafe fn save_settings(hwnd: HWND, app: &mut App) -> Result<()> {
-    let mut config = app.host.config.lock().unwrap();
-    let mut next = config.clone();
-    next.port = text(hwnd, PORT).trim().parse()?;
-    ensure!(next.port > 0, "端口范围为 1–65535");
-    next.public_access = checked(hwnd, PUBLIC);
-    next.bluetooth = checked(hwnd, BT);
-    next.auto_start = checked(hwnd, STARTUP);
-    let restart = next.port != config.port || next.bluetooth != config.bluetooth;
-    set_startup(next.auto_start)?;
-    app.host.store.save(&next)?;
-    *config = next;
-    drop(config);
-    app.host.trust.lock().unwrap().close_pairing();
-    clear_pairing(hwnd, app);
-    app.host.status(if restart {
-        "设置已保存；端口和蓝牙更改请退出后重新启动"
-    } else {
-        "设置已保存"
-    });
-    refresh(hwnd, app);
-    Ok(())
-}
-
-unsafe fn begin_pairing(hwnd: HWND, app: &mut App) -> Result<()> {
-    let config = app.host.config.lock().unwrap().clone();
+unsafe fn begin_pairing(_hwnd: HWND, app: &mut App) -> Result<()> {
     ensure!(
-        config.port == app.running_port,
-        "端口已更改，请先退出并重新启动 CSync 后再配对"
+        app.host.config.lock().unwrap().port == app.running_port,
+        "端口已更改，请退出并重新启动后再配对"
     );
     app.host.trust.lock().unwrap().open_pairing();
-    SetDlgItemTextW(
-        hwnd,
-        CODE,
-        wide("配对已开启，请在手机输入地址和端口（120 秒）").as_ptr(),
-    );
-    SetTimer(hwnd, 1, 1000, None);
     Ok(())
 }
 
@@ -752,21 +566,31 @@ fn local_addresses() -> Result<Vec<String>> {
     Ok(hosts)
 }
 
-unsafe fn clear_pairing(hwnd: HWND, app: &mut App) {
-    let _ = app;
-    KillTimer(hwnd, 1);
-    SetDlgItemTextW(hwnd, CODE, wide("配对未开启").as_ptr());
+unsafe fn restore_tray(hwnd: HWND, app: &mut App) {
+    // Updating first also handles a duplicate TaskbarCreated broadcast without
+    // adding a second icon. Retry independently of the WebView's refresh timer.
+    let registered = notify_icon(hwnd, NIM_MODIFY) || notify_icon(hwnd, NIM_ADD);
+    if !registered && app.tray_registered != Some(false) {
+        app.host.status("托盘图标暂不可用，正在自动恢复");
+    }
+    app.tray_registered = Some(registered);
+    SetTimer(
+        hwnd,
+        TRAY_TIMER,
+        if registered { 30_000 } else { 5_000 },
+        None,
+    );
 }
 
-unsafe fn notify_icon(hwnd: HWND, operation: u32) {
+unsafe fn notify_icon(hwnd: HWND, operation: u32) -> bool {
     let mut data: NOTIFYICONDATAW = std::mem::zeroed();
     data.cbSize = std::mem::size_of_val(&data) as u32;
     data.hWnd = hwnd;
     data.uID = 1;
     data.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     data.uCallbackMessage = TRAY;
-    data.hIcon = LoadIconW(null_mut(), IDI_APPLICATION);
+    data.hIcon = LoadIconW(GetModuleHandleW(null()), 101usize as *const u16);
     let tip = wide("CSync · 剪贴板同步");
     data.szTip[..tip.len()].copy_from_slice(&tip);
-    Shell_NotifyIconW(operation, &data);
+    Shell_NotifyIconW(operation, &data) != 0
 }
