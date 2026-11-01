@@ -1,6 +1,6 @@
 # CSync
 
-![](./r.png)
+![](./1.png)
 
 在 Windows 与 Android 间无缝同步剪贴板，支持局域网与远程公网连接
 
@@ -13,8 +13,6 @@
 - 基础的局域网配对，同步剪贴板
 
 ## 暂未实现或未测试：
-
-- 蓝牙同步
 
 - 公网IP配对同步
 
@@ -42,8 +40,8 @@ Windows 端的控制台使用系统的 Edge Webview, 所以在打开 Windows 端
 
 | 占用 | Windows 端 | Android 端 |
 |-|-|-|
-| 运行内存 | 约 5MB | 约 70MB |
-| 本体体积 | 约 2MB | 约 60MB |
+| 运行内存 | 约 5MB | 约 60MB |
+| 本体体积 | 约 2MB | 约 2MB |
 
 - Android 使用 Shizuku 突破限制，实现无感同步
 

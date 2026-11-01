@@ -2,9 +2,7 @@
 
 [简体中文](./README/zh_cn.md)
 
-> Currently, only Simplified Chinese is supported. English support is coming soon.
-
-![](./README/r.png)
+![](./README/1.png)
 
 Synchronize your clipboard in real time between Windows and Android devices.
 
@@ -18,7 +16,7 @@ CSync is very small and only has the function of syncing the clipboard.
 
 ## Unverified functionality
 
-- Sync the clipboard via the public internet or Bluetooth
+- Sync the clipboard via the public internet
 
 # Why I decided to develop this software
 
@@ -42,8 +40,8 @@ You may need Edge installed in your PC because CSync uses your Edge webview as W
 
 | resource usage | Windows  | Android  |
 |-|-|-|
-| RAM usage | about 5MB | about 70MB |
-| Disk usage | about 2MB | about 60MB |
+| RAM usage | about 5MB | about 60MB |
+| Disk usage | about 2MB | about 3MB |
 
 - By utilizing Shizuku, CSync bypasses Android system limitations to enable background synchronization.
 
