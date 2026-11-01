@@ -20,7 +20,7 @@ import androidx.compose.ui.zIndex
 import kotlin.math.roundToInt
 
 @Composable
-fun HostList(profiles: List<HostProfile>, activeHostId: String, onAdd: () -> Unit,
+fun HostList(profiles: List<HostProfile>, activeHostId: String,
              onEdit: (HostProfile) -> Unit, onDelete: (HostProfile) -> Unit,
              onReorder: (List<HostProfile>) -> Unit) {
     var order by remember(profiles) { mutableStateOf(profiles) }
@@ -53,14 +53,17 @@ fun HostList(profiles: List<HostProfile>, activeHostId: String, onAdd: () -> Uni
             offset = originalTop + travel - top(order, target)
         }
     }
-    OutlinedCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("添加主机", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                FilledTonalIconButton(onClick = onAdd) { Icon(painterResource(R.drawable.ic_material_add), "添加主机") }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (order.isEmpty()) {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Icon(painterResource(R.drawable.ic_material_computer), null, Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
+                    Text(tr("hosts.empty_title"), style = MaterialTheme.typography.titleLarge)
+                    Text(tr("hosts.empty"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
-            Text("拖动右侧手柄调整顺序，优先连接最上方主机。", style = MaterialTheme.typography.bodyMedium)
-            if (order.isEmpty()) Text("尚未添加主机，点击 + 输入电脑 IP 配对。", Modifier.padding(vertical = 16.dp))
+        } else {
+            Text(tr("hosts.order_hint"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
             order.forEachIndexed { index, profile -> key(profile.id) {
                 OutlinedCard(onClick = { onEdit(profile) }, modifier = Modifier.fillMaxWidth()
                     .onSizeChanged { heights[profile.id] = it.height }
@@ -71,16 +74,16 @@ fun HostList(profiles: List<HostProfile>, activeHostId: String, onAdd: () -> Uni
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(profile.name, style = MaterialTheme.typography.titleMedium)
                             Text("${profile.host}:${profile.port}", style = MaterialTheme.typography.bodyMedium)
-                            Text(if (profile.id == activeHostId) "已连接 · 优先级 ${index + 1}" else "优先级 ${index + 1}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                            Text(if (profile.id == activeHostId) tr("hosts.connected_priority", "priority" to (index + 1)) else tr("hosts.priority", "priority" to (index + 1)), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                         }
-                        IconButton(onClick = { onDelete(profile) }) { Icon(painterResource(R.drawable.ic_material_delete), "删除 ${profile.name}") }
+                        IconButton(onClick = { onDelete(profile) }) { Icon(painterResource(R.drawable.ic_material_delete), tr("hosts.delete_accessibility", "device" to (profile.name))) }
                         Box(Modifier.size(48.dp).semantics {
-                            contentDescription = "拖动调整 ${profile.name} 的优先级"
+                            contentDescription = tr("hosts.drag_accessibility", "device" to (profile.name))
                             customActions = listOf(
-                                CustomAccessibilityAction("上移") {
+                                CustomAccessibilityAction(tr("hosts.move_up")) {
                                     if (index > 0) { onReorder(order.toMutableList().apply { add(index - 1, removeAt(index)) }); true } else false
                                 },
-                                CustomAccessibilityAction("下移") {
+                                CustomAccessibilityAction(tr("hosts.move_down")) {
                                     if (index < order.lastIndex) { onReorder(order.toMutableList().apply { add(index + 1, removeAt(index)) }); true } else false
                                 }
                             )

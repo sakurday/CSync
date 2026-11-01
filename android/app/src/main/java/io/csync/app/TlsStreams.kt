@@ -9,7 +9,7 @@ import javax.net.ssl.SSLEngine
 import javax.net.ssl.SSLEngineResult
 import javax.net.ssl.SSLException
 
-/** A bounded TLS 1.3 byte-stream adapter shared by TCP and Bluetooth RFCOMM.
+/** A bounded TLS 1.3 byte-stream adapter for the network connection.
  * One reader and one writer are supported, as required by SSLEngine's contract.
  * No raw application bytes are ever written to the transport.
  */
@@ -34,7 +34,7 @@ class TlsStreams(private val rawIn: InputStream, private val rawOut: OutputStrea
         netIn.compact()
         if (!netIn.hasRemaining()) throw SSLException("TLS record exceeds buffer")
         val n = rawIn.read(netIn.array(), netIn.position(), netIn.remaining())
-        if (n < 0) throw EOFException("连接关闭")
+        if (n < 0) throw EOFException(msg("protocol.connection_closed"))
         netIn.position(netIn.position() + n)
         netIn.flip()
     }
@@ -104,7 +104,7 @@ class TlsStreams(private val rawIn: InputStream, private val rawOut: OutputStrea
         override fun write(bytes: ByteArray, offset: Int, length: Int) {
             val source = ByteBuffer.wrap(bytes, offset, length)
             while (source.hasRemaining()) {
-                if (closed) throw EOFException("连接关闭")
+                if (closed) throw EOFException(msg("protocol.connection_closed"))
                 val result = wrap(source)
                 if (result.bytesConsumed() == 0 && result.bytesProduced() == 0) throw SSLException("TLS made no progress")
             }

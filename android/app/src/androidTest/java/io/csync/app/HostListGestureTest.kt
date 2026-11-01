@@ -11,7 +11,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
 import org.junit.Test
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 class HostListGestureTest {
@@ -23,13 +22,12 @@ class HostListGestureTest {
         )
         val order = mutableStateOf(initial)
         val saved = AtomicReference(initial)
-        val added = AtomicBoolean(false)
         val activity = instrument.startActivitySync(Intent(instrument.targetContext, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)) as MainActivity
         try {
             instrument.runOnMainSync {
                 activity.setContent { MaterialTheme {
-                    HostList(order.value, "", { added.set(true) }, {}, { profile ->
+                    HostList(order.value, "", {}, { profile ->
                         order.value = order.value.filterNot { it.id == profile.id }
                     }, { profiles -> saved.set(profiles); order.value = profiles })
                 } }
@@ -46,8 +44,8 @@ class HostListGestureTest {
                 repeat(30) { find(description)?.let { return it }; Thread.sleep(100) }
                 error("Missing UI node: $description")
             }
-            val first = Rect().also { awaitNode("拖动调整 测试甲 的优先级").getBoundsInScreen(it) }
-            val second = Rect().also { awaitNode("拖动调整 测试乙 的优先级").getBoundsInScreen(it) }
+            val first = Rect().also { awaitNode(tr("hosts.drag_accessibility", "device" to "测试甲")).getBoundsInScreen(it) }
+            val second = Rect().also { awaitNode(tr("hosts.drag_accessibility", "device" to "测试乙")).getBoundsInScreen(it) }
             val down = SystemClock.uptimeMillis()
             fun touch(action: Int, y: Float) {
                 val event = MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, first.centerX().toFloat(), y, 0)
@@ -69,10 +67,7 @@ class HostListGestureTest {
                     try { instrument.sendPointerSync(event) } finally { event.recycle() }
                 }
             }
-            tap("添加主机")
-            instrument.waitForIdleSync()
-            assertTrue(added.get())
-            tap("删除 测试乙")
+            tap(tr("hosts.delete_accessibility", "device" to "测试乙"))
             instrument.waitForIdleSync()
             assertEquals(listOf(initial[0]), order.value)
         } finally { instrument.runOnMainSync { activity.finish() } }

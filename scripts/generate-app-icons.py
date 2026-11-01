@@ -1,6 +1,6 @@
 """Regenerate platform icons from the repository's icon_512.png (requires Pillow)."""
 from pathlib import Path
-from PIL import Image
+from PIL import Image, ImageChops
 
 root = Path(__file__).resolve().parent.parent
 source = root / "icon_512.png"
@@ -14,7 +14,7 @@ res = root / "android/app/src/main/res"
 icon.save(res / "drawable-nodpi/app_icon.png")
 # Android status-bar icons require a transparent, monochrome alpha mask.
 notification = Image.new("RGBA", icon.size, "white")
-notification.putalpha(icon.convert("L"))
+notification.putalpha(ImageChops.multiply(icon.convert("L"), icon.getchannel("A")))
 notification.save(res / "drawable-nodpi/ic_notification.png")
 for density, size in [("mdpi", 48), ("hdpi", 72), ("xhdpi", 96), ("xxhdpi", 144), ("xxxhdpi", 192)]:
     folder = res / f"mipmap-{density}"

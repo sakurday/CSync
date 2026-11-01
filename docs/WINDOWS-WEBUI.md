@@ -9,7 +9,7 @@ unreachable background process; background startup opens the window in that case
 Settings also provides an explicit Exit button. Tray registration retries every
 5 seconds on failure and is refreshed every 30 seconds after success.
 
-The two pages use Google `@material/web` 2.5.0 components. The sidebar and cards are
+The Sync, Devices and Settings pages use Google `@material/web` 2.5.0 components. The sidebar and cards are
 CSS layouts; buttons, switches, fields and dialogs are official components. Assets
 are compiled into the executable; no CDN, HTTP management port or remote fonts are
 used. The page cannot navigate to external content, open windows or make network
@@ -42,7 +42,7 @@ Do not ship real runtime data. Runtime installation is not performed automatical
 
 Verify page navigation, pause/resume, settings validation/save, IP pairing with
 both confirmations, timeout/rejection, close/reopen and --background startup.
-Port and Bluetooth changes still require a complete exit/restart. Pairing remains
+Port changes still require a complete exit/restart. Pairing remains
 IP + port only. No QR/link pairing or clipboard history is added.
 
 ## Local file integrity
@@ -62,3 +62,26 @@ a Low integrity diagnostic process failed even in this state and are not reliabl
 evidence of missing registration. Use the application's `trayAvailable` state.
 The EXE's Medium label also means a Low integrity build process may no longer be
 able to overwrite it; do not broaden folder permissions to work around this.
+
+## Desktop device management (2026-11-01)
+
+The persistent left navigation opens Sync, Devices and Settings. Devices owns IP
+pairing and individual removal; there is no priority, sorting control or active-device
+selector. The server continues broadcasting to all connected, trusted devices.
+The sidebar becomes a compact labeled rail below 840px; content is capped at 960px.
+Light/dark tonal surfaces, shape tokens and reduced-motion support use Material 3.
+
+Add device opens the pairing panel and the existing 120-second pairing window.
+Both peers still verify the same code. Delete device shows a confirmation and sends
+`deletePeer` with the certificate identity, never a display name or row index.
+The server persists removal before revoking trust, then broadcasts a session change;
+only the revoked peer disconnects. Invalid identities and save failures preserve trust.
+The old bulk-revoke backend remains for compatibility, but has no settings UI entry.
+
+Verification: 13 Rust tests passed (2 ignored), including two TLS clients with the
+same display name, retained-session broadcast, reconnect rejection, persisted trust
+and failed-save behavior. Five web tests passed, including navigation, empty list,
+safe names and deletion by identity. These tests use isolated data, no user clipboard.
+
+Actual English UI was inspected with Computer Use at narrow and maximized window sizes.
+Existing phone remained connected; production pairing/deletion was not exercised.

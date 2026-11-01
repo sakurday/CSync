@@ -1,3 +1,4 @@
+use crate::i18n::tr;
 use anyhow::{Context, Result, ensure};
 use csync_core::{protocol::DEFAULT_PORT, security::fingerprint};
 use rcgen::{CertifiedKey, generate_simple_self_signed};
@@ -12,20 +13,20 @@ use windows_sys::Win32::{Foundation::LocalFree, Security::Cryptography::*, Syste
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
+    pub language: String,
     pub name: String,
     pub port: u16,
     pub public_access: bool,
-    pub bluetooth: bool,
     pub auto_start: bool,
     pub peers: BTreeMap<String, String>,
 }
 impl Default for Config {
     fn default() -> Self {
         Self {
+            language: "system".into(),
             name: std::env::var("COMPUTERNAME").unwrap_or_else(|_| "Windows".into()),
             port: DEFAULT_PORT,
             public_access: false,
-            bluetooth: false,
             auto_start: false,
             peers: BTreeMap::new(),
         }
@@ -57,7 +58,7 @@ impl Store {
             let executable = std::env::current_exe()?;
             let directory = executable
                 .parent()
-                .context("无法确定程序目录")?
+                .context(tr("storage.no_exe_directory", &[]))?
                 .join("data");
             let legacy = std::env::var_os("LOCALAPPDATA").map(|p| PathBuf::from(p).join("CSync"));
             prepare_directory(&directory, legacy.as_deref())?;
@@ -68,7 +69,13 @@ impl Store {
     pub fn config(&self) -> Result<Config> {
         let path = self.directory.join("settings.json");
         if path.exists() {
-            Ok(serde_json::from_slice(&std::fs::read(path)?)?)
+            let stored: serde_json::Value = serde_json::from_slice(&std::fs::read(path)?)?;
+            let config = serde_json::from_value(stored.clone())?;
+            // Retire the old transport flag without changing trusted peers or identity files.
+            if stored.get("bluetooth").is_some() {
+                self.save(&config)?;
+            }
+            Ok(config)
         } else {
             Ok(Config::default())
         }
@@ -109,8 +116,7 @@ fn prepare_directory(directory: &Path, legacy: Option<&Path>) -> Result<()> {
     if let Some(legacy) = legacy.filter(|p| p.join("identity.dpapi").is_file()) {
         // Publish identity and settings together; never mix two device identities.
         let staging = directory.with_extension(format!("migrate-{}", uuid::Uuid::new_v4()));
-        std::fs::create_dir_all(&staging)
-            .context("无法在程序目录创建 data，请将程序放在可写目录")?;
+        std::fs::create_dir_all(&staging).context(tr("storage.create_data_failed", &[]))?;
         let result = (|| -> Result<()> {
             for name in ["identity.dpapi", "settings.json"] {
                 let source = legacy.join(name);
@@ -118,16 +124,16 @@ fn prepare_directory(directory: &Path, legacy: Option<&Path>) -> Result<()> {
                     atomic_write(&staging.join(name), &std::fs::read(&source)?)?;
                 }
             }
-            std::fs::rename(&staging, directory).context("无法完成旧配置迁移")?;
+            std::fs::rename(&staging, directory)
+                .context(tr("storage.migrate_publish_failed", &[]))?;
             Ok(())
         })();
         if result.is_err() {
             let _ = std::fs::remove_dir_all(&staging);
         }
-        result.context("迁移旧版配置失败，原文件已保留")?;
+        result.context(tr("storage.migrate_failed", &[]))?;
     } else {
-        std::fs::create_dir_all(directory)
-            .context("无法在程序目录创建 data，请将程序放在可写目录")?;
+        std::fs::create_dir_all(directory).context(tr("storage.create_data_failed", &[]))?;
     }
     Ok(())
 }
@@ -135,6 +141,53 @@ fn prepare_directory(directory: &Path, legacy: Option<&Path>) -> Result<()> {
 #[cfg(test)]
 mod storage_tests {
     use super::*;
+    #[test]
+    fn retiring_transport_flag_preserves_network_settings_trust_and_identity() {
+        let root = std::env::current_dir()
+            .unwrap()
+            .join(".build")
+            .join(format!("transport-migration-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&root).unwrap();
+        let store = Store {
+            directory: root.clone(),
+        };
+        let identity = store.identity().unwrap().id;
+        let identity_bytes = std::fs::read(root.join("identity.dpapi")).unwrap();
+        let mut config = Config::default();
+        config.name = "Existing computer".into();
+        config.port = 45879;
+        config.public_access = true;
+        config.auto_start = true;
+        config.language = "zh-Hans".into();
+        config.peers.insert("a".repeat(64), "Existing phone".into());
+        let mut legacy = serde_json::to_value(&config).unwrap();
+        legacy["bluetooth"] = true.into();
+        std::fs::write(
+            root.join("settings.json"),
+            serde_json::to_vec(&legacy).unwrap(),
+        )
+        .unwrap();
+        let migrated = store.config().unwrap();
+        assert_eq!(
+            serde_json::to_value(&migrated).unwrap(),
+            serde_json::to_value(&config).unwrap()
+        );
+        assert_eq!(store.identity().unwrap().id, identity);
+        assert_eq!(
+            std::fs::read(root.join("identity.dpapi")).unwrap(),
+            identity_bytes
+        );
+        let saved = std::fs::read(root.join("settings.json")).unwrap();
+        assert!(
+            serde_json::from_slice::<serde_json::Value>(&saved)
+                .unwrap()
+                .get("bluetooth")
+                .is_none()
+        );
+        store.config().unwrap();
+        assert_eq!(std::fs::read(root.join("settings.json")).unwrap(), saved);
+        std::fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn migration_preserves_identity_and_trust_and_keeps_originals() {
         let root = std::env::current_dir()
@@ -174,10 +227,15 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> Result<()> {
         MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH, MoveFileExW,
     };
     let temp = path.with_extension("new");
-    let mut file = std::fs::File::create(&temp)
-        .with_context(|| format!("无法创建配置临时文件 {}", temp.display()))?;
-    std::io::Write::write_all(&mut file, bytes).context("无法写入配置临时文件")?;
-    file.sync_all().context("无法刷新配置临时文件")?;
+    let mut file = std::fs::File::create(&temp).with_context(|| {
+        tr(
+            "storage.create_temp_failed",
+            &[("path", temp.display().to_string())],
+        )
+    })?;
+    std::io::Write::write_all(&mut file, bytes).context(tr("storage.write_temp_failed", &[]))?;
+    file.sync_all()
+        .context(tr("storage.flush_temp_failed", &[]))?;
     drop(file);
     ensure!(
         unsafe {

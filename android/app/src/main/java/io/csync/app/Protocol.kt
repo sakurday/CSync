@@ -10,13 +10,12 @@ object Protocol {
     const val VERSION = 1
     const val MAX_TEXT = 256 * 1024
     const val MAX_FRAME = MAX_TEXT * 6 + 8192
-    const val BT_UUID = "b5d37a72-0b98-4bca-9690-f1f709d093d8"
     fun hash(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
     fun hash(text: String): String = hash(text.toByteArray(Charsets.UTF_8))
     fun message(type: String, vararg fields: Pair<String, Any>): JSONObject = JSONObject().put("type", type).also { obj -> fields.forEach { obj.put(it.first, it.second) } }
     fun read(input: DataInputStream): JSONObject {
         val length = input.readInt()
-        require(length in 1..MAX_FRAME) { "消息长度超限" }
+        require(length in 1..MAX_FRAME) { msg("protocol.frame_too_large") }
         val bytes = ByteArray(length)
         input.readFully(bytes)
         // Reject malformed UTF-8 rather than silently replacing bytes.

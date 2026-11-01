@@ -8,7 +8,6 @@ pub const DEFAULT_PORT: u16 = 45876;
 pub const MAX_TEXT: usize = 256 * 1024;
 // JSON escaping can expand one source byte into six bytes.
 pub const MAX_FRAME: usize = MAX_TEXT * 6 + 8192;
-pub const BT_UUID: &str = "b5d37a72-0b98-4bca-9690-f1f709d093d8";
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Clip {

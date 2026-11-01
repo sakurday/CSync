@@ -1,0 +1,942 @@
+{
+  "nav.hosts": {
+    "description": "Android：主机页面标题和导航入口",
+    "parameters": []
+  },
+  "settings.general": {
+    "description": "Android：设置页常规分组",
+    "parameters": []
+  },
+  "settings.shizuku": {
+    "description": "Android：设置页 Shizuku 授权入口",
+    "parameters": []
+  },
+  "settings.battery": {
+    "description": "Android：设置页电池优化入口",
+    "parameters": []
+  },
+  "settings.privacy": {
+    "description": "Android：设置页剪贴板隐私说明标题",
+    "parameters": []
+  },
+  "settings.about": {
+    "description": "Android：设置页关于分组",
+    "parameters": []
+  },
+  "hosts.empty_title": {
+    "description": "Android：主机页空列表标题",
+    "parameters": []
+  },
+  "background.battery_enabled": {
+    "description": "Android：已忽略电池优化的状态摘要",
+    "parameters": []
+  },
+  "nav.sync": {
+    "description": "Windows 设置窗口静态文案；Windows 设置窗口静态文案；Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "nav.settings": {
+    "description": "Windows 设置窗口静态文案；Windows 设置窗口静态文案；Android：MainActivity；Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "app.tagline": {
+    "description": "Windows 设置窗口静态文案；Windows 设置窗口静态文案；Android：SyncService；两端界面通用文案",
+    "parameters": []
+  },
+  "app.description": {
+    "description": "Windows 设置窗口静态文案；Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "about.title": {
+    "description": "Windows 设置窗口静态文案；Windows 设置窗口静态文案；Android：MainActivity；Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "about.libraries": {
+    "description": "Windows 设置窗口静态文案；Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "about.version": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": [
+      "version"
+    ]
+  },
+  "common.cancel": {
+    "description": "Windows 设置窗口静态文案；Android：MainActivity；Android：MainActivity；Android：MainActivity；Android：MainActivity；Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "common.close": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "common.ok": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "common.save": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "common.delete": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "common.pause": {
+    "description": "Android：SyncService；Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "common.resume": {
+    "description": "Android：SyncService；Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "common.reconnect": {
+    "description": "Android：SyncService；两端界面通用文案",
+    "parameters": []
+  },
+  "common.stop": {
+    "description": "Android：SyncService；两端界面通用文案",
+    "parameters": []
+  },
+  "sync.paused": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "sync.stopped": {
+    "description": "Android：SyncService；Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "sync.starting": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "sync.not_started": {
+    "description": "Android：Settings；两端界面通用文案",
+    "parameters": []
+  },
+  "sync.not_connected": {
+    "description": "Android：SyncService；Android：Settings；两端界面通用文案",
+    "parameters": []
+  },
+  "sync.connecting": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "sync.inactive": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "sync.not_running": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "sync.connected_computer": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "sync.connected_hint": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": [
+      "device"
+    ]
+  },
+  "sync.paired_hint": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": [
+      "device"
+    ]
+  },
+  "sync.pair_hint": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "sync.start": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "sync.stop": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "sync.pause": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "sync.resume": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "sync.current_status": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "sync.connection_status": {
+    "description": "两端界面通用文案",
+    "parameters": [
+      "status"
+    ]
+  },
+  "sync.connection_transport": {
+    "description": "两端界面通用文案",
+    "parameters": [
+      "transport"
+    ]
+  },
+  "pair.enter_ip": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "pair.action": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "pair.instructions": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "pair.computer_ip": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "pair.port": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "pair.verify_title": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "pair.continue": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "pair.in_progress": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "pair.wait_computer": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "pair.required": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "pair.failed": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "pair.cancelled": {
+    "description": "Android：Transport；两端界面通用文案",
+    "parameters": []
+  },
+  "pair.not_approved": {
+    "description": "Android：Transport；两端界面通用文案",
+    "parameters": []
+  },
+  "pair.storage_failed": {
+    "description": "Android：Transport；两端界面通用文案",
+    "parameters": []
+  },
+  "pair.expired": {
+    "description": "Android：Transport；两端界面通用文案",
+    "parameters": []
+  },
+  "pair.identity_mismatch": {
+    "description": "Android：DeviceIdentity；两端界面通用文案",
+    "parameters": []
+  },
+  "hosts.add": {
+    "description": "Android：MainActivity；Android：HostList；Android：HostList；两端界面通用文案",
+    "parameters": []
+  },
+  "hosts.edit": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "hosts.edit_hint": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "hosts.order_hint": {
+    "description": "Android：HostList；两端界面通用文案",
+    "parameters": []
+  },
+  "hosts.empty": {
+    "description": "Android：HostList；两端界面通用文案",
+    "parameters": []
+  },
+  "hosts.priority": {
+    "description": "Android：HostList；两端界面通用文案",
+    "parameters": [
+      "priority"
+    ]
+  },
+  "hosts.connected_priority": {
+    "description": "Android：HostList；两端界面通用文案",
+    "parameters": [
+      "priority"
+    ]
+  },
+  "hosts.delete_accessibility": {
+    "description": "Android：HostList；两端界面通用文案",
+    "parameters": [
+      "device"
+    ]
+  },
+  "hosts.drag_accessibility": {
+    "description": "Android：HostList；两端界面通用文案",
+    "parameters": [
+      "device"
+    ]
+  },
+  "hosts.move_up": {
+    "description": "Android：HostList；两端界面通用文案",
+    "parameters": []
+  },
+  "hosts.move_down": {
+    "description": "Android：HostList；两端界面通用文案",
+    "parameters": []
+  },
+  "hosts.delete_title": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "hosts.delete_hint": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": [
+      "device",
+      "host"
+    ]
+  },
+  "hosts.invalid_endpoint": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "hosts.invalid_address": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "hosts.duplicate": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "hosts.save_failed": {
+    "description": "Android：Settings；Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "hosts.migration_failed": {
+    "description": "Android：Settings；两端界面通用文案",
+    "parameters": []
+  },
+  "hosts.default_name": {
+    "description": "Android：Settings；两端界面通用文案",
+    "parameters": []
+  },
+  "hosts.unpaired": {
+    "description": "Android：Settings；两端界面通用文案",
+    "parameters": []
+  },
+  "transport.tcp": {
+    "description": "Android：Transport；两端界面通用文案",
+    "parameters": [
+      "host"
+    ]
+  },
+  "background.section": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "background.notification_settings": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "background.privacy": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "background.battery_title": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "background.battery_hint": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "background.enable": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "background.settings_failed": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "background.start_failed": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "background.boot_denied": {
+    "description": "Android：BootReceiver；两端界面通用文案",
+    "parameters": []
+  },
+  "shizuku.unauthorized": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "shizuku.not_started": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "shizuku.permission_hint": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "shizuku.start_hint": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "shizuku.authorize": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "shizuku.start": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "shizuku.start_first": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "shizuku.authorized": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": []
+  },
+  "shizuku.bridge_failed": {
+    "description": "Android：SyncService；两端界面通用文案",
+    "parameters": []
+  },
+  "shizuku.disconnected": {
+    "description": "Android：SyncService；两端界面通用文案",
+    "parameters": []
+  },
+  "shizuku.stopped": {
+    "description": "Android：SyncService；两端界面通用文案",
+    "parameters": []
+  },
+  "shizuku.connecting": {
+    "description": "Android：SyncService；两端界面通用文案",
+    "parameters": []
+  },
+  "shizuku.start_required": {
+    "description": "Android：SyncService；两端界面通用文案",
+    "parameters": []
+  },
+  "shizuku.permission_required": {
+    "description": "Android：SyncService；两端界面通用文案",
+    "parameters": []
+  },
+  "shizuku.connection_failed": {
+    "description": "Android：SyncService；两端界面通用文案",
+    "parameters": []
+  },
+  "clipboard.listener_ready": {
+    "description": "Android：ClipboardUserService；两端界面通用文案",
+    "parameters": []
+  },
+  "clipboard.interface_unavailable": {
+    "description": "Android：ClipboardUserService；两端界面通用文案",
+    "parameters": []
+  },
+  "clipboard.read_restricted": {
+    "description": "Android：ClipboardUserService；两端界面通用文案",
+    "parameters": []
+  },
+  "sync.queue_full": {
+    "description": "Android：SyncService；两端界面通用文案",
+    "parameters": []
+  },
+  "sync.connection_failed": {
+    "description": "Android：SyncService；两端界面通用文案",
+    "parameters": []
+  },
+  "sync.recovering": {
+    "description": "Android：SyncService；两端界面通用文案",
+    "parameters": []
+  },
+  "sync.wait_network": {
+    "description": "Android：SyncService；两端界面通用文案",
+    "parameters": []
+  },
+  "sync.retry": {
+    "description": "Android：SyncService；两端界面通用文案",
+    "parameters": [
+      "seconds"
+    ]
+  },
+  "sync.try_tcp": {
+    "description": "Android：SyncService；两端界面通用文案",
+    "parameters": [
+      "device",
+      "host"
+    ]
+  },
+  "sync.connected": {
+    "description": "Android：SyncService；两端界面通用文案",
+    "parameters": [
+      "transport"
+    ]
+  },
+  "sync.remote_not_applied": {
+    "description": "Android：SyncService；两端界面通用文案",
+    "parameters": [
+      "status"
+    ]
+  },
+  "sync.local_not_applied": {
+    "description": "Android：SyncService；两端界面通用文案",
+    "parameters": [
+      "status"
+    ]
+  },
+  "protocol.invalid_order": {
+    "description": "Android：SyncService；两端界面通用文案",
+    "parameters": []
+  },
+  "protocol.incompatible": {
+    "description": "Android：SyncService；两端界面通用文案",
+    "parameters": []
+  },
+  "protocol.frame_too_large": {
+    "description": "Android：Protocol；两端界面通用文案",
+    "parameters": []
+  },
+  "protocol.connection_closed": {
+    "description": "Android：TlsStreams；Android：TlsStreams；两端界面通用文案",
+    "parameters": []
+  },
+  "protocol.handshake_failed": {
+    "description": "Android：Transport；两端界面通用文案",
+    "parameters": []
+  },
+  "notification.description": {
+    "description": "Android：SyncService；两端界面通用文案",
+    "parameters": []
+  },
+  "notification.paused": {
+    "description": "Android：SyncService；两端界面通用文案",
+    "parameters": []
+  },
+  "app.window_title": {
+    "description": "Android：SyncService；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.text_only": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.tray_check": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.sync_subtitle": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.starting": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.reading_connections": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.connect_phone": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.pair_instructions": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.pair_start": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.pair_cancel": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.paired_devices": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.settings_hint": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.connection_settings": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.listen_port": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "windows.restart_hint": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "windows.public_access": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.public_access_hint": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.autostart": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.autostart_hint": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.save_settings": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.devices_privacy": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.privacy_hint": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.revoke_all": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.about": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.quit": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.back_settings": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.pair_confirm_title": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.pair_verify": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.pair_timeout": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.pair_reject": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.pair_approve": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.revoke_title": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.revoke_hint": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.revoke_confirm": {
+    "description": "Windows 设置窗口静态文案；两端界面通用文案",
+    "parameters": []
+  },
+  "windows.invalid_port": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "windows.close_to_tray": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "windows.close_to_exit": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "windows.sync_enabled": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "windows.online_count": {
+    "description": "两端界面通用文案",
+    "parameters": [
+      "count"
+    ]
+  },
+  "windows.no_addresses": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "windows.endpoint": {
+    "description": "两端界面通用文案",
+    "parameters": [
+      "port"
+    ]
+  },
+  "windows.endpoint_pending": {
+    "description": "两端界面通用文案",
+    "parameters": [
+      "port",
+      "savedPort"
+    ]
+  },
+  "windows.pair_open": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "windows.pair_closed": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "windows.no_devices": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "windows.tray_open": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "windows.tray_toggle": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "windows.tray_quit": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "windows.tray_recovering": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "windows.port_restart_required": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "windows.port_range": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "windows.settings_saved_restart": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "windows.settings_saved": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "windows.unknown_action": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "windows.network_failed": {
+    "description": "两端界面通用文案",
+    "parameters": [
+      "error"
+    ]
+  },
+  "windows.webview_failed": {
+    "description": "两端界面通用文案",
+    "parameters": [
+      "error"
+    ]
+  },
+  "windows.webview_init_failed": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "windows.start_failed": {
+    "description": "两端界面通用文案",
+    "parameters": [
+      "error"
+    ]
+  },
+  "windows.tcp_ready": {
+    "description": "两端界面通用文案",
+    "parameters": [
+      "port"
+    ]
+  },
+  "windows.connection_incomplete": {
+    "description": "两端界面通用文案",
+    "parameters": [
+      "error"
+    ]
+  },
+  "windows.pair_save_failed": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "windows.remote_not_applied": {
+    "description": "两端界面通用文案",
+    "parameters": [
+      "status"
+    ]
+  },
+  "windows.addresses_failed": {
+    "description": "两端界面通用文案",
+    "parameters": [
+      "status"
+    ]
+  },
+  "storage.no_exe_directory": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "storage.create_data_failed": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "storage.migrate_publish_failed": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "storage.migrate_failed": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "storage.create_temp_failed": {
+    "description": "两端界面通用文案",
+    "parameters": [
+      "path"
+    ]
+  },
+  "storage.write_temp_failed": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "storage.flush_temp_failed": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "language.title": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "language.system": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "language.choose": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "language.hint": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "language.invalid": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "status.paused": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "status.unavailable": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "status.shizuku_unavailable": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "status.clipboard_unavailable": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "status.applied": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "status.superseded": {
+    "description": "两端界面通用文案",
+    "parameters": []
+  },
+  "pair.verify_computer": {
+    "description": "Android：MainActivity；两端界面通用文案",
+    "parameters": [
+      "code"
+    ]
+  },
+  "error.details": {
+    "description": "两端操作失败详情。summary 是已本地化的概要，error 为系统技术诊断，不翻译诊断中的数据。",
+    "parameters": [
+      "error",
+      "summary"
+    ]
+  },
+  "windows.operation_failed": {
+    "description": "Windows 设置或配对操作失败的概要。",
+    "parameters": []
+  },
+  "windows.devices": {
+    "description": "Windows：设备管理与同步页面",
+    "parameters": []
+  },
+  "windows.devices_hint": {
+    "description": "Windows：设备管理与同步页面",
+    "parameters": []
+  },
+  "windows.add_device": {
+    "description": "Windows：设备管理与同步页面",
+    "parameters": []
+  },
+  "windows.manage_devices": {
+    "description": "Windows：设备管理与同步页面",
+    "parameters": []
+  },
+  "windows.shared_sync": {
+    "description": "Windows：设备管理与同步页面",
+    "parameters": []
+  },
+  "windows.shared_sync_hint": {
+    "description": "Windows：设备管理与同步页面",
+    "parameters": []
+  },
+  "windows.empty_devices_hint": {
+    "description": "Windows：设备管理与同步页面",
+    "parameters": []
+  },
+  "windows.delete_device_title": {
+    "description": "Windows：设备管理与同步页面",
+    "parameters": []
+  },
+  "windows.delete_device_hint": {
+    "description": "Windows：设备管理与同步页面",
+    "parameters": [
+      "device"
+    ]
+  },
+  "windows.device_online": {
+    "description": "Windows：设备管理与同步页面",
+    "parameters": []
+  },
+  "windows.device_offline": {
+    "description": "Windows：设备管理与同步页面",
+    "parameters": []
+  },
+  "windows.clipboard_privacy": {
+    "description": "Windows：剪贴板隐私说明",
+    "parameters": []
+  }
+}

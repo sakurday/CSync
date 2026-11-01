@@ -1,3 +1,4 @@
+use crate::i18n::{msg, tr};
 use crate::{
     clipboard::Clipboard,
     server::{Host, UiEvent, UiSink, WAKE},
@@ -45,7 +46,7 @@ pub fn show_error(message: &str) {
     unsafe {
         MessageBoxW(
             null_mut(),
-            wide(message).as_ptr(),
+            wide(&crate::i18n::render(message)).as_ptr(),
             wide("CSync").as_ptr(),
             MB_OK | MB_ICONERROR,
         );
@@ -71,7 +72,11 @@ pub fn run() -> Result<()> {
             dwICC: ICC_STANDARD_CLASSES,
         });
         let store = Store::open()?;
-        let config = store.config()?;
+        let mut config = store.config()?;
+        if !crate::i18n::set_language(&config.language) {
+            crate::i18n::set_language("system");
+            config.language = "system".into();
+        }
         let identity = store.identity()?;
         let (tx, receiver) = mpsc::channel();
         let host = Host::new(store, config.clone(), identity, UiSink::new(tx))?;
@@ -92,7 +97,7 @@ pub fn run() -> Result<()> {
         let hwnd = CreateWindowExW(
             0,
             class_name.as_ptr(),
-            wide("CSync · 剪贴板同步").as_ptr(),
+            wide(&tr("app.window_title", &[])).as_ptr(),
             WS_OVERLAPPEDWINDOW,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
@@ -130,17 +135,18 @@ pub fn run() -> Result<()> {
         let network = host.clone();
         runtime.spawn(async move {
             if let Err(error) = crate::server::serve(network.clone()).await {
-                network.status(format!("网络服务启动失败：{error}"));
+                network.status(msg(
+                    "windows.network_failed",
+                    &[("error", format!("{error}"))],
+                ));
             }
         });
-        if config.bluetooth {
-            crate::bluetooth::start(host.clone(), runtime.handle().clone());
-        }
         refresh(hwnd, &app);
         if !std::env::args().any(|s| s == "--background") || app.tray_registered != Some(true) {
             if let Err(error) = open_webview(hwnd, &mut app) {
-                show_error(&format!(
-                    "无法打开设置界面，请确认已安装 Microsoft Edge WebView2 Runtime：{error:#}"
+                show_error(&msg(
+                    "windows.webview_failed",
+                    &[("error", format!("{error:#}"))],
                 ));
             }
         }
@@ -187,6 +193,17 @@ unsafe fn open_webview(hwnd: HWND, app: &mut App) -> Result<()> {
         let mut rect = RECT::default();
         GetClientRect(hwnd, &mut rect);
         let html = include_str!("../web/index.html")
+            .replace(
+                "/* I18N_CATALOG */",
+                &format!(
+                    "window.csyncCatalog={};",
+                    crate::i18n::CATALOG
+                        .to_string()
+                        .replace('<', "\\u003c")
+                        .replace('\u{2028}', "\\u2028")
+                        .replace('\u{2029}', "\\u2029")
+                ),
+            )
             .replace("/* MATERIAL_BUNDLE */", include_str!("../web/bundle.js"))
             .replace(
                 "<!-- OPEN_SOURCE_LIBRARIES -->",
@@ -219,7 +236,7 @@ unsafe fn open_webview(hwnd: HWND, app: &mut App) -> Result<()> {
                 }
             })
             .build_as_child(&WindowHandle(hwnd))
-            .context("WebView2 初始化失败")?;
+            .context(tr("windows.webview_init_failed", &[]))?;
         app.last_state.borrow_mut().clear();
         app.webview = Some(view);
     }
@@ -239,11 +256,15 @@ unsafe fn refresh(_hwnd: HWND, app: &App) {
             "version": env!("CARGO_PKG_VERSION"),
             "paused": app.host.paused.load(Ordering::Relaxed),
             "trayAvailable": app.tray_registered == Some(true),
-            "status": *app.host.status.lock().unwrap(),
+            "status": crate::i18n::render(&app.host.status.lock().unwrap()),
+            "language": config.language,
+            "locale": crate::i18n::locale(),
             "online": app.host.active.lock().unwrap().len(),
-            "peers": config.peers.values().collect::<Vec<_>>(),
+            "peers": config.peers.iter().map(|(id, name)| serde_json::json!({
+                "id": id, "name": name, "online": app.host.active.lock().unwrap().contains_key(id)
+            })).collect::<Vec<_>>(),
             "port": config.port, "runningPort": app.running_port,
-            "public_access": config.public_access, "bluetooth": config.bluetooth,
+            "public_access": config.public_access,
             "auto_start": config.auto_start,
             "addresses": local_addresses().unwrap_or_default(),
             "pairingOpen": app.host.trust.lock().unwrap().pairing_open(),
@@ -266,6 +287,21 @@ unsafe fn command(hwnd: HWND, app: &mut App, body: &str) -> Result<()> {
             app.last_state.borrow_mut().clear();
         }
         "quit" => PostQuitMessage(0),
+        "language" => {
+            let language = value["language"].as_str().unwrap_or("");
+            ensure!(
+                language == "system" || crate::i18n::CATALOG.get(language).is_some(),
+                tr("language.invalid", &[])
+            );
+            let mut config = app.host.config.lock().unwrap();
+            let mut next = config.clone();
+            next.language = language.into();
+            app.host.store.save(&next)?;
+            *config = next;
+            crate::i18n::set_language(language);
+            SetWindowTextW(hwnd, wide(&tr("app.window_title", &[])).as_ptr());
+            notify_icon(hwnd, NIM_MODIFY);
+        }
         "pause" => {
             app.host.paused.fetch_xor(true, Ordering::Relaxed);
         }
@@ -285,30 +321,33 @@ unsafe fn command(hwnd: HWND, app: &mut App, body: &str) -> Result<()> {
         "revoke" => {
             app.host.revoke_all()?;
         }
+        "deletePeer" => {
+            let id = value["id"].as_str().unwrap_or("");
+            app.host.revoke_peer(id)?;
+        }
         "save" => {
             let mut config = app.host.config.lock().unwrap();
             let mut next = config.clone();
             let port = value["port"]
                 .as_u64()
                 .filter(|p| *p > 0 && *p <= 65535)
-                .ok_or_else(|| anyhow::anyhow!("端口范围为 1–65535"))?;
+                .ok_or_else(|| anyhow::anyhow!(tr("windows.port_range", &[])))?;
             next.port = port as u16;
             next.public_access = value["public_access"].as_bool().unwrap_or(false);
-            next.bluetooth = value["bluetooth"].as_bool().unwrap_or(false);
             next.auto_start = value["auto_start"].as_bool().unwrap_or(false);
-            let restart = next.port != config.port || next.bluetooth != config.bluetooth;
+            let restart = next.port != config.port;
             set_startup(next.auto_start)?;
             app.host.store.save(&next)?;
             *config = next;
             drop(config);
             app.host.trust.lock().unwrap().close_pairing();
             app.host.status(if restart {
-                "设置已保存；端口和蓝牙更改请退出后重新启动"
+                msg("windows.settings_saved_restart", &[])
             } else {
-                "设置已保存"
+                msg("windows.settings_saved", &[])
             });
         }
-        _ => anyhow::bail!("未知操作"),
+        _ => anyhow::bail!(tr("windows.unknown_action", &[])),
     }
     refresh(hwnd, app);
     Ok(())
@@ -362,9 +401,6 @@ unsafe extern "system" fn window_proc(hwnd: HWND, message: u32, w: WPARAM, l: LP
             while let Ok(event) = app.receiver.try_recv() {
                 match event {
                     UiEvent::Refresh => {}
-                    UiEvent::Status(status) => {
-                        *app.host.status.lock().unwrap() = status;
-                    }
                     UiEvent::Pair { pin, name, reply } => {
                         let code =
                             csync_core::protocol::text_hash(&format!("{}:{pin}", app.host.id))
@@ -387,7 +423,13 @@ unsafe extern "system" fn window_proc(hwnd: HWND, message: u32, w: WPARAM, l: LP
             }
             while let Ok(body) = app.commands.try_recv() {
                 if let Err(error) = command(hwnd, app, &body) {
-                    app.host.status(error.to_string());
+                    app.host.status(msg(
+                        "error.details",
+                        &[
+                            ("summary", msg("windows.operation_failed", &[])),
+                            ("error", error.to_string()),
+                        ],
+                    ));
                 }
             }
             refresh(hwnd, app);
@@ -453,15 +495,25 @@ unsafe extern "system" fn window_proc(hwnd: HWND, message: u32, w: WPARAM, l: LP
             }
             if l as u32 == WM_RBUTTONUP {
                 let menu = CreatePopupMenu();
-                AppendMenuW(menu, MF_STRING, 120, wide("打开 CSync").as_ptr());
+                AppendMenuW(
+                    menu,
+                    MF_STRING,
+                    120,
+                    wide(&tr("windows.tray_open", &[])).as_ptr(),
+                );
                 AppendMenuW(
                     menu,
                     MF_STRING,
                     PAUSE as usize,
-                    wide("暂停 / 恢复同步").as_ptr(),
+                    wide(&tr("windows.tray_toggle", &[])).as_ptr(),
                 );
                 AppendMenuW(menu, MF_SEPARATOR, 0, null());
-                AppendMenuW(menu, MF_STRING, EXIT as usize, wide("退出").as_ptr());
+                AppendMenuW(
+                    menu,
+                    MF_STRING,
+                    EXIT as usize,
+                    wide(&tr("windows.tray_quit", &[])).as_ptr(),
+                );
                 let mut point = std::mem::zeroed();
                 GetCursorPos(&mut point);
                 SetForegroundWindow(hwnd);
@@ -502,7 +554,7 @@ unsafe extern "system" fn window_proc(hwnd: HWND, message: u32, w: WPARAM, l: LP
 unsafe fn begin_pairing(_hwnd: HWND, app: &mut App) -> Result<()> {
     ensure!(
         app.host.config.lock().unwrap().port == app.running_port,
-        "端口已更改，请退出并重新启动后再配对"
+        tr("windows.port_restart_required", &[])
     );
     app.host.trust.lock().unwrap().open_pairing();
     Ok(())
@@ -533,7 +585,13 @@ fn local_addresses() -> Result<Vec<String>> {
             let mut buffer = vec![0usize; (bytes as usize).div_ceil(std::mem::size_of::<usize>())];
             let first = buffer.as_mut_ptr().cast::<IP_ADAPTER_ADDRESSES_LH>();
             let status = GetAdaptersAddresses(AF_INET as u32, flags, null(), first, &mut bytes);
-            ensure!(status == 0, "无法读取网络地址（错误 {status}）");
+            ensure!(
+                status == 0,
+                tr(
+                    "windows.addresses_failed",
+                    &[("status", status.to_string())]
+                )
+            );
             let mut adapter = first;
             while !adapter.is_null() {
                 if (*adapter).OperStatus == IfOperStatusUp {
@@ -571,7 +629,7 @@ unsafe fn restore_tray(hwnd: HWND, app: &mut App) {
     // adding a second icon. Retry independently of the WebView's refresh timer.
     let registered = notify_icon(hwnd, NIM_MODIFY) || notify_icon(hwnd, NIM_ADD);
     if !registered && app.tray_registered != Some(false) {
-        app.host.status("托盘图标暂不可用，正在自动恢复");
+        app.host.status(msg("windows.tray_recovering", &[]));
     }
     app.tray_registered = Some(registered);
     SetTimer(
@@ -590,7 +648,9 @@ unsafe fn notify_icon(hwnd: HWND, operation: u32) -> bool {
     data.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     data.uCallbackMessage = TRAY;
     data.hIcon = LoadIconW(GetModuleHandleW(null()), 101usize as *const u16);
-    let tip = wide("CSync · 剪贴板同步");
-    data.szTip[..tip.len()].copy_from_slice(&tip);
+    let tip = wide(&tr("app.window_title", &[]));
+    let length = tip.len().min(data.szTip.len());
+    data.szTip[..length].copy_from_slice(&tip[..length]);
+    data.szTip[data.szTip.len() - 1] = 0;
     Shell_NotifyIconW(operation, &data) != 0
 }

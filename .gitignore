@@ -5,6 +5,9 @@
 **/build/
 **/.gradle/
 /android/local.properties
+# Android Studio signed APK exports (including metadata and baseline profiles)
+/android/app/release/
+/android/app/debug/
 *.keystore
 *.jks
 *.log

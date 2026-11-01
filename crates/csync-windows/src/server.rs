@@ -1,3 +1,4 @@
+use crate::i18n::{msg, tr};
 use crate::storage::{Config, Identity, Store};
 use anyhow::{Context, Result, bail, ensure};
 use csync_core::{
@@ -16,8 +17,8 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::{
-    io::{AsyncRead, AsyncWrite},
-    net::TcpListener,
+    io::AsyncWrite,
+    net::{TcpListener, TcpStream},
     sync::{Semaphore, broadcast, oneshot},
     time::timeout,
 };
@@ -36,7 +37,6 @@ pub enum UiEvent {
         clip: Clip,
         reply: oneshot::Sender<bool>,
     },
-    Status(String),
 }
 
 pub struct UiSink {
@@ -107,7 +107,7 @@ impl Host {
             bus,
             coordinator: Mutex::new(Coordinator::default()),
             active: Mutex::new(HashMap::new()),
-            status: Mutex::new("正在启动".into()),
+            status: Mutex::new(msg("sync.starting", &[])),
             acceptor: TlsAcceptor::from(Arc::new(tls)),
             slots: Arc::new(Semaphore::new(8)),
         }))
@@ -133,6 +133,18 @@ impl Host {
         let _ = self.bus.send(Bus::Changed);
         Ok(())
     }
+    pub fn revoke_peer(&self, pin: &str) -> Result<()> {
+        let mut config = self.config.lock().unwrap();
+        ensure!(config.peers.contains_key(pin), "unknown device");
+        let mut next = config.clone();
+        next.peers.remove(pin);
+        // Persist first: a failed save must leave the current trust and sessions intact.
+        self.store.save(&next)?;
+        *config = next;
+        self.trust.lock().unwrap().peers.remove(pin);
+        let _ = self.bus.send(Bus::Changed);
+        Ok(())
+    }
 }
 
 pub async fn serve(host: Arc<Host>) -> Result<()> {
@@ -151,7 +163,7 @@ pub async fn serve(host: Arc<Host>) -> Result<()> {
         Ok(TcpListener::from_std(socket.into())?)
     })()
     .ok();
-    host.status(format!("TCP 端口 {port} 已就绪"));
+    host.status(msg("windows.tcp_ready", &[("port", format!("{port}"))]));
     let mut attempts: HashMap<std::net::IpAddr, VecDeque<Instant>> = HashMap::new();
     loop {
         let result = tokio::select! {
@@ -188,8 +200,11 @@ pub async fn serve(host: Arc<Host>) -> Result<()> {
         let host = host.clone();
         tokio::spawn(async move {
             let _permit = permit;
-            if let Err(error) = connection(host.clone(), socket, false).await {
-                host.status(format!("连接未完成：{error:#}"));
+            if let Err(error) = connection(host.clone(), socket).await {
+                host.status(msg(
+                    "windows.connection_incomplete",
+                    &[("error", format!("{error:#}"))],
+                ));
             }
         });
     }
@@ -212,10 +227,7 @@ async fn send<W: AsyncWrite + Unpin>(writer: &mut W, msg: &Message) -> Result<()
     Ok(())
 }
 
-pub async fn connection<S>(host: Arc<Host>, stream: S, bluetooth: bool) -> Result<()>
-where
-    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
-{
+pub async fn connection(host: Arc<Host>, stream: TcpStream) -> Result<()> {
     let mut tls = timeout(Duration::from_secs(10), host.acceptor.accept(stream)).await??;
     let pin = fingerprint(
         tls.get_ref()
@@ -232,10 +244,7 @@ where
         name,
     } = first
     {
-        ensure!(
-            version == VERSION && !bluetooth,
-            "unsupported pairing request"
-        );
+        ensure!(version == VERSION, "unsupported pairing request");
         ensure!(valid_name(&name), "invalid device name");
         ensure!(
             token.is_empty() && host.trust.lock().unwrap().consume_ip_pairing(),
@@ -275,7 +284,9 @@ where
             ensure!(config.peers.len() < 16, "too many devices");
             let mut next = config.clone();
             next.peers.insert(pin.clone(), name);
-            host.store.save(&next).context("保存配对设备失败")?;
+            host.store
+                .save(&next)
+                .context(tr("windows.pair_save_failed", &[]))?;
             *config = next;
             host.trust.lock().unwrap().peers.insert(pin.clone());
             Ok(())
@@ -379,7 +390,7 @@ where
                         Message::Pong { .. } => {},
                         Message::Ack { status, .. } => {
                             if matches!(status.as_str(), "paused" | "shizuku_unavailable" | "clipboard_unavailable") {
-                                host.status(format!("手机暂未写入内容：{status}"));
+                                host.status(msg("windows.remote_not_applied", &[("status", msg(&format!("status.{status}"), &[]))]));
                             }
                         },
                         _ => bail!("unexpected message"),

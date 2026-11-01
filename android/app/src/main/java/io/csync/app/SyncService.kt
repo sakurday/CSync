@@ -20,6 +20,9 @@ import java.util.concurrent.atomic.AtomicReference
 class SyncService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val main = Handler(Looper.getMainLooper())
+    private val languageChanged = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == "language") main.post { notifyStatus() }
+    }
     private lateinit var settings: Settings
     private lateinit var identity: DeviceIdentity
     private var network: Job? = null
@@ -37,7 +40,7 @@ class SyncService : Service() {
         if (!destroyed) {
             networkGeneration.incrementAndGet()
             runCatching { connectingSocket.getAndSet(null)?.close() }
-            link.get()?.takeUnless { it.bluetooth }?.close()
+            link.get()?.close()
             networkChanged.trySend(Unit)
         }
     }
@@ -82,7 +85,7 @@ class SyncService : Service() {
                 pending[clip.id] = clip.sequence
                 if (!channel.trySend(Protocol.message("clip", "clip" to clip.json())).isSuccess) {
                     pending.remove(clip.id)
-                    status("发送队列已满；请重新复制")
+                    status(msg("sync.queue_full"))
                 }
             }
         }
@@ -93,28 +96,28 @@ class SyncService : Service() {
             binding = false
             if (destroyed || service == null) return
             bridge = IClipboardBridge.Stub.asInterface(service)
-            runCatching { bridge?.start(listener) }.onFailure { settings.shizukuStatus = "剪贴板桥接失败"; notifyStatus() }
+            runCatching { bridge?.start(listener) }.onFailure { settings.shizukuStatus = msg("shizuku.bridge_failed"); notifyStatus() }
         }
         override fun onServiceDisconnected(name: ComponentName?) {
             bridge = null; binding = false
-            settings.shizukuStatus = "剪贴板服务断开，等待恢复"; notifyStatus()
+            settings.shizukuStatus = msg("shizuku.disconnected"); notifyStatus()
             main.postDelayed({ bindBridge() }, 2000)
         }
     }
     private val received = Shizuku.OnBinderReceivedListener { main.post { bindBridge() } }
     private val dead = Shizuku.OnBinderDeadListener {
         bridge = null; binding = false
-        settings.shizukuStatus = "Shizuku 已停止，请重新启动"; notifyStatus()
+        settings.shizukuStatus = msg("shizuku.stopped"); notifyStatus()
     }
 
     override fun onCreate() {
         super.onCreate()
         settings = Settings(this)
+        getSharedPreferences("settings", MODE_PRIVATE).registerOnSharedPreferenceChangeListener(languageChanged)
+        settings.connected = false
         settings.activeHostId = ""
-        settings.shizukuStatus = "正在连接 Shizuku"
+        settings.shizukuStatus = msg("shizuku.connecting")
         identity = DeviceIdentity()
-        getSystemService(NotificationManager::class.java).createNotificationChannel(
-            NotificationChannel(CHANNEL, "剪贴板同步", NotificationManager.IMPORTANCE_LOW).apply { description = "显示连接与 Shizuku 状态"; setShowBadge(false) })
         startForeground(NOTIFICATION, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
         Shizuku.addBinderReceivedListenerSticky(received)
         Shizuku.addBinderDeadListener(dead)
@@ -141,13 +144,13 @@ class SyncService : Service() {
 
     private fun bindBridge() {
         if (destroyed || bridge != null || binding) return
-        if (!Shizuku.pingBinder()) { settings.shizukuStatus = "请启动 Shizuku"; notifyStatus(); return }
+        if (!Shizuku.pingBinder()) { settings.shizukuStatus = msg("shizuku.start_required"); notifyStatus(); return }
         if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
-            settings.shizukuStatus = "请在应用首页授权 Shizuku"; notifyStatus(); return
+            settings.shizukuStatus = msg("shizuku.permission_required"); notifyStatus(); return
         }
         binding = true
         runCatching { Shizuku.bindUserService(serviceArgs, connection) }.onFailure {
-            binding = false; settings.shizukuStatus = "Shizuku 服务连接失败"; notifyStatus()
+            binding = false; settings.shizukuStatus = msg("shizuku.connection_failed"); notifyStatus()
         }
     }
 
@@ -157,11 +160,8 @@ class SyncService : Service() {
             if (networkChanged.tryReceive().isSuccess) backoff.reset()
             val generation = networkGeneration.get()
             val profiles = settings.profiles
-            // No TCP attempts while offline; Bluetooth remains an optional fallback.
-            var selected = if (connectivity.activeNetwork != null) connectProfiles(profiles, false, generation) else null
-            if (selected == null && settings.bluetoothEnabled && generation == networkGeneration.get()) {
-                selected = connectProfiles(profiles.filter { it.bluetoothAddress.isNotEmpty() }, true, generation)
-            }
+            // Wait for network events while offline instead of periodically opening sockets.
+            val selected = if (connectivity.activeNetwork != null) connectProfiles(profiles, generation) else null
             if (generation != networkGeneration.get()) {
                 selected?.second?.close()
                 backoff.reset()
@@ -169,21 +169,22 @@ class SyncService : Service() {
             }
             val current = selected?.second
             if (current == null) {
-                status("连接失败；检查电脑、地址、防火墙或配对状态")
+                status(msg("sync.connection_failed"))
             } else {
                 val connected = current
                 if (!currentCoroutineContext().isActive) { connected.close(); break }
                 link.set(connected)
                 // Catch a network callback racing with publication of the new TCP link.
-                if (!connected.bluetooth && generation != networkGeneration.get()) connected.close()
+                if (generation != networkGeneration.get()) connected.close()
                 val sessionStarted = SystemClock.elapsedRealtime()
                 try {
                     settings.activeHostId = selected!!.first.id
                     session(connected)
                 }
                 catch (cancel: CancellationException) { throw cancel }
-                catch (_: Exception) { status("连接中断，正在恢复") }
+                catch (_: Exception) { status(msg("sync.recovering")) }
                 finally {
+                    settings.connected = false
                     backoff.sessionEnded(SystemClock.elapsedRealtime() - sessionStarted)
                     outgoing.getAndSet(null)?.close()
                     pending.clear()
@@ -191,31 +192,31 @@ class SyncService : Service() {
                     if (link.compareAndSet(connected, null)) connected.close() else connected.close()
                 }
             }
-            if (connectivity.activeNetwork == null && !settings.bluetoothEnabled) {
-                status("等待网络恢复")
+            if (connectivity.activeNetwork == null) {
+                status(msg("sync.wait_network"))
                 awaitReconnect(networkChanged, null) // Event-driven when offline; no periodic socket attempts.
                 backoff.reset()
             } else {
                 val delayMs = backoff.nextDelayMs()
-                status("连接已断开，约 ${delayMs / 1000} 秒后重试；网络变化时立即重试")
+                status(msg("sync.retry", "seconds" to (delayMs / 1000)))
                 if (awaitReconnect(networkChanged, delayMs)) backoff.reset()
             }
         }
     }
 
-    private suspend fun connectProfiles(profiles: List<HostProfile>, bluetooth: Boolean, generation: Long): Pair<HostProfile, Link>? {
+    private suspend fun connectProfiles(profiles: List<HostProfile>, generation: Long): Pair<HostProfile, Link>? {
         for (profile in profiles) {
             currentCoroutineContext().ensureActive()
             if (generation != networkGeneration.get()) break
-            status(if (bluetooth) "正在尝试蓝牙 · ${profile.name}" else "正在连接 ${profile.name} · ${profile.host}")
-            try { return profile to connect(profile, bluetooth, generation) }
+            status(msg("sync.try_tcp", "device" to (profile.name), "host" to (profile.host)))
+            try { return profile to connect(profile, generation) }
             catch (cancel: CancellationException) { throw cancel }
             catch (_: Exception) { /* Try the next host only while this network is current. */ }
         }
         return null
     }
 
-    private suspend fun connect(profile: HostProfile, bluetooth: Boolean, generation: Long): Link {
+    private suspend fun connect(profile: HostProfile, generation: Long): Link {
         val context = currentCoroutineContext()
         val opened: (Closeable) -> Unit = { socket ->
             connectingSocket.set(socket)
@@ -223,8 +224,7 @@ class SyncService : Service() {
         }
         var current: Link? = null
         try {
-            current = if (bluetooth) Transport.bluetooth(this, profile.bluetoothAddress, identity, profile.pin, opened)
-                else Transport.tcp(profile.host, profile.port, identity, profile.pin, opened)
+            current = Transport.tcp(profile.host, profile.port, identity, profile.pin, opened)
             Transport.startSession(current, profile.pin, settings.deviceName)
             context.ensureActive()
             return current
@@ -236,7 +236,9 @@ class SyncService : Service() {
         val channel = Channel<JSONObject>(8)
         pending.clear()
         outgoing.set(channel)
-        status("已连接 · ${current.label}")
+        settings.connected = true
+        settings.transport = current.label
+        status(msg("sync.connected", "transport" to (current.label)))
         var revision = 0L
         val lastReceived = AtomicLong(SystemClock.elapsedRealtime())
         val sender = launch {
@@ -257,10 +259,10 @@ class SyncService : Service() {
                 when (incoming.getString("type")) {
                     "ping" -> channel.send(Protocol.message("pong", "nonce" to incoming.getLong("nonce")))
                     "pong" -> Unit
-                    "ack" -> { pending.remove(incoming.getString("id")); status("电脑暂未应用内容：${incoming.optString("status")}") }
+                    "ack" -> { pending.remove(incoming.getString("id")); status(msg("sync.remote_not_applied", "status" to msg("status.${incoming.optString("status")}"))) }
                     "commit" -> {
                         val next = incoming.getLong("revision")
-                        check(next > revision) { "服务器消息顺序错误" }
+                        check(next > revision) { msg("protocol.invalid_order") }
                         revision = next
                         val clip = Clip.parse(incoming.getJSONObject("clip"))
                         if (clip.origin == identity.id) {
@@ -274,30 +276,38 @@ class SyncService : Service() {
                             else -> if (runCatching { bridge?.writeText(clip.text, clip.id, clip.hash) == true }.getOrDefault(false)) "applied" else "clipboard_unavailable"
                         }
                         channel.send(Protocol.message("ack", "id" to clip.id, "status" to result))
-                        if (result != "applied" && result != "superseded") status("收到内容但未写入：$result")
+                        if (result != "applied" && result != "superseded") status(msg("sync.local_not_applied", "status" to msg("status.$result")))
                     }
-                    else -> error("服务器消息不兼容")
+                    else -> error(msg("protocol.incompatible"))
                 }
             }
         } finally { outgoing.compareAndSet(channel, null); channel.close(); current.close(); sender.cancel(); heartbeat.cancel() }
     }
 
-    private fun status(value: String) { if (settings.status != value) { settings.status = value; notifyStatus() } }
+    private fun status(value: String) { if (settings.statusMessage != value) { settings.status = value; notifyStatus() } }
     @android.annotation.SuppressLint("MissingPermission") // Denied notification permission is reflected by Android; FGS still supplies its notification.
     private fun notifyStatus() { if (!destroyed) getSystemService(NotificationManager::class.java).notify(NOTIFICATION, notification()) }
     private fun notification(): Notification {
+        getSystemService(NotificationManager::class.java).createNotificationChannel(
+            NotificationChannel(CHANNEL, tr("app.tagline"), NotificationManager.IMPORTANCE_LOW).apply { description = tr("notification.description"); setShowBadge(false) })
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         fun action(request: Int, type: String): PendingIntent = PendingIntent.getService(this, request, Intent(this, SyncService::class.java).setAction(type), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        return Notification.Builder(this, CHANNEL).setSmallIcon(R.drawable.ic_notification).setContentTitle(if (settings.paused) "CSync · 已暂停" else "CSync · 剪贴板同步")
+        return Notification.Builder(this, CHANNEL).setSmallIcon(R.drawable.ic_notification).setContentTitle(if (settings.paused) tr("notification.paused") else tr("app.window_title"))
             .setContentText(settings.status).setStyle(Notification.BigTextStyle().bigText("${settings.status}\n${settings.shizukuStatus}"))
             .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true).setVisibility(Notification.VISIBILITY_PRIVATE)
-            .addAction(Notification.Action.Builder(null, if (settings.paused) "恢复" else "暂停", action(1, ACTION_PAUSE)).build())
-            .addAction(Notification.Action.Builder(null, "重连", action(2, ACTION_RECONNECT)).build())
-            .addAction(Notification.Action.Builder(null, "停止", action(3, ACTION_STOP)).build()).build()
+            .addAction(Notification.Action.Builder(null, if (settings.paused) tr("common.resume") else tr("common.pause"), action(1, ACTION_PAUSE)).build())
+            .addAction(Notification.Action.Builder(null, tr("common.reconnect"), action(2, ACTION_RECONNECT)).build())
+            .addAction(Notification.Action.Builder(null, tr("common.stop"), action(3, ACTION_STOP)).build()).build()
     }
     override fun onBind(intent: Intent?): IBinder? = null
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        notifyStatus()
+    }
     override fun onDestroy() {
         destroyed = true
+        settings.connected = false
+        getSharedPreferences("settings", MODE_PRIVATE).unregisterOnSharedPreferenceChangeListener(languageChanged)
         main.removeCallbacksAndMessages(null)
         link.getAndSet(null)?.close()
         connectingSocket.getAndSet(null)?.close()
@@ -309,8 +319,8 @@ class SyncService : Service() {
         networkChanged.close()
         if (Shizuku.pingBinder()) runCatching { Shizuku.unbindUserService(serviceArgs, connection, true) }
         bridge = null
-        settings.status = "同步已停止"
-        settings.shizukuStatus = "尚未连接"
+        settings.status = msg("sync.stopped")
+        settings.shizukuStatus = msg("sync.not_connected")
         stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()
     }

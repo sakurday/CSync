@@ -45,8 +45,8 @@ class ClipboardUserService : IClipboardBridge.Stub() {
                     call("addPrimaryClipChangedListener", changeListener)
                     registered = true
                 }
-                target?.onStatus("剪贴板监听已就绪")
-            } catch (_: Exception) { target?.onStatus("剪贴板接口不可用，请检查系统与 Shizuku 权限") }
+                target?.onStatus(msg("clipboard.listener_ready"))
+            } catch (_: Exception) { target?.onStatus(msg("clipboard.interface_unavailable")) }
         }
     }
 
@@ -81,7 +81,7 @@ class ClipboardUserService : IClipboardBridge.Stub() {
             localStamp = stamp
             localHash = hash
             target?.onClip(text)
-        } catch (_: Exception) { runCatching { target?.onStatus("剪贴板读取受限；解锁或检查系统权限后重试") } }
+        } catch (_: Exception) { runCatching { target?.onStatus(msg("clipboard.read_restricted")) } }
     }
 
     private fun call(name: String, leading: Any? = null): Any? {

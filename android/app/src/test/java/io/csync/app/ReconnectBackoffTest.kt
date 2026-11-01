@@ -62,4 +62,19 @@ class ReconnectBackoffTest {
         assertTrue(waiting.isCancelled)
         events.close()
     }
+
+    @Test fun closingNetworkMonitorCancelsTimedAndOfflineWaits(): Unit = runBlocking {
+        for (delayMs in listOf(300_000L, null)) {
+            val events = Channel<Unit>(Channel.CONFLATED)
+            val waiting = async { awaitReconnect(events, delayMs) }
+            yield()
+            events.close()
+            try {
+                waiting.await()
+                fail("A closed network monitor must cancel reconnecting")
+            } catch (_: CancellationException) {
+                assertTrue(waiting.isCancelled)
+            }
+        }
+    }
 }

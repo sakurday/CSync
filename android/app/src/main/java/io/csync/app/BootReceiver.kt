@@ -8,7 +8,7 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED && Settings(context).let { it.enabled && it.paired }) {
             runCatching { context.startForegroundService(Intent(context, SyncService::class.java)) }
-                .onFailure { Settings(context).status = "系统限制了开机恢复，请打开 CSync" }
+                .onFailure { Settings(context).status = msg("background.boot_denied") }
         }
     }
 }

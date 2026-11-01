@@ -27,9 +27,13 @@ windows-sys = { version = "0.61", features = [
   "Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_LibraryLoader",
   "Win32_System_DataExchange", "Win32_System_Memory", "Win32_System_Registry",
   "Win32_System_Threading", "Win32_Security", "Win32_Security_Cryptography",
+  "Win32_Globalization",
   "Win32_UI_WindowsAndMessaging", "Win32_UI_Shell", "Win32_UI_Controls",
-  "Win32_Networking_WinSock", "Win32_Devices_Bluetooth", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_StationsAndDesktops"
+  "Win32_Networking_WinSock", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_StationsAndDesktops"
   , "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis"
 ] }
 wry = { version = "0.57.1", default-features = false, features = ["os-webview"] }
 raw-window-handle = "0.6"
+
+[build-dependencies]
+serde_json.workspace = true

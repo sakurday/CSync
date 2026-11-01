@@ -1,6 +1,6 @@
 # CSync protocol v1
 
-Both TCP and RFCOMM carry TLS 1.3, then identical framed JSON. There is no cleartext application endpoint and no HTTP server.
+TCP carries TLS 1.3, followed by framed JSON. There is no cleartext application endpoint and no HTTP server.
 
 ## Frame
 
@@ -14,7 +14,7 @@ The user enters the Windows host and port. During a 120-second pairing window th
 
 The phone sends `{"type":"pair","version":1,"token":"","name":"Phone"}`. The server consumes the pairing window and asks the Windows user to confirm. If approved, it sends `{"type":"pair_challenge"}`. Only after the Android user confirms does the phone send `{"type":"pair_confirm"}`. The server persists the client fingerprint and returns `{"type":"paired","version":1,"server":"<server identity>","name":"Windows"}`; the phone verifies that identity matches the TLS certificate before persisting it. Subsequent connections pin the exact server certificate.
 
-Enrollment is TCP-only. Denial, timeout or disconnection before both confirmations does not register a device. There is no clipboard access before enrollment. Bluetooth connections must already be trusted. The protocol requires updated applications on both sides for new pairing.
+Enrollment is TCP-only. Denial, timeout or disconnection before both confirmations does not register a device. There is no clipboard access before enrollment. The protocol requires updated applications on both sides for new pairing.
 
 ## Session
 

@@ -105,7 +105,7 @@ async fn listener(host: Arc<Host>, port: u16) -> (u16, tokio::task::JoinHandle<(
             while let Ok((socket, _)) = listener.accept().await {
                 let host = host.clone();
                 tokio::spawn(async move {
-                    if let Err(error) = connection(host, socket, false).await {
+                    if let Err(error) = connection(host, socket).await {
                         eprintln!("Test connection rejected: {error}");
                     }
                 });
@@ -239,6 +239,53 @@ async fn tls_pairing_roundtrip_replay_origin_and_revocation() {
             .is_err()
     );
     assert!(phone.hello(port).await.is_err());
+    task.abort();
+}
+
+#[tokio::test]
+async fn deleting_one_device_preserves_other_sessions_and_saved_trust() {
+    let (host, ui) = host(&format!("delete-peer-{}", uuid::Uuid::new_v4()), 0);
+    mock_ui(&host, ui, None);
+    let first = client(&host);
+    let second = client(&host);
+    {
+        let mut config = host.config.lock().unwrap();
+        for id in [&first.id, &second.id] {
+            config.peers.insert(id.clone(), "Same name".into());
+            host.trust.lock().unwrap().peers.insert(id.clone());
+        }
+        host.store.save(&config).unwrap();
+    }
+    let (port, task) = listener(host.clone(), 0).await;
+    let mut removed = first.hello(port).await.unwrap();
+    let mut retained = second.hello(port).await.unwrap();
+    assert!(host.revoke_peer("not-a-device").is_err());
+    host.revoke_peer(&first.id).unwrap();
+    assert!(
+        timeout(Duration::from_secs(3), read_message(&mut removed))
+            .await
+            .unwrap()
+            .is_err()
+    );
+    assert!(first.hello(port).await.is_err());
+    let persisted = host.store.config().unwrap();
+    assert!(!persisted.peers.contains_key(&first.id));
+    assert!(persisted.peers.contains_key(&second.id));
+    assert!(host.trust.lock().unwrap().peers.contains(&second.id));
+    let clip = Clip::new(&host.id, 1, "remaining session".into()).unwrap();
+    host.publish(clip.clone());
+    assert!(
+        matches!(timeout(Duration::from_secs(3), read_message(&mut retained)).await.unwrap().unwrap(), Message::Commit { clip: received, .. } if received == clip)
+    );
+    // A failed disk save cannot revoke a still-authorized device in memory.
+    let saved_path = host.store.directory.clone();
+    let moved_path = saved_path.with_extension("save-failure");
+    std::fs::rename(&saved_path, &moved_path).unwrap();
+    let result = host.revoke_peer(&second.id);
+    std::fs::rename(&moved_path, &saved_path).unwrap();
+    assert!(result.is_err());
+    assert!(host.config.lock().unwrap().peers.contains_key(&second.id));
+    assert!(host.trust.lock().unwrap().peers.contains(&second.id));
     task.abort();
 }
 

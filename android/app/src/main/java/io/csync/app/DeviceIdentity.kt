@@ -56,7 +56,7 @@ class DeviceIdentity {
             override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
             override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) { throw java.security.cert.CertificateException("client-only trust manager") }
             override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {
-                if (chain == null || chain.size != 1 || (pin != null && Protocol.hash(chain[0].encoded) != pin)) throw java.security.cert.CertificateException("电脑身份不匹配，请重新配对")
+                if (chain == null || chain.size != 1 || (pin != null && Protocol.hash(chain[0].encoded) != pin)) throw java.security.cert.CertificateException(msg("pair.identity_mismatch"))
                 chain[0].checkValidity()
             }
         }

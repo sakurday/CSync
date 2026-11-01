@@ -2,13 +2,13 @@
 
 ## Trust boundary
 
-The local OS, Shizuku installation, paired peer, and user-approved desktop are trusted. The LAN, Internet, mDNS-like discovery data (not implemented in v1), Bluetooth names, DNS and IP routing are untrusted. A paired device intentionally has permission to receive new clipboard contents and submit text to the paired clipboard.
+The local OS, Shizuku installation, paired peer, and user-approved desktop are trusted. The LAN, Internet, mDNS-like discovery data (not implemented in v1), DNS and IP routing are untrusted. A paired device intentionally has permission to receive new clipboard contents and submit text to the paired clipboard.
 
-TLS 1.3 encrypts and authenticates both TCP and Bluetooth. Previously paired devices pin each other's certificate identities. During IP enrollment, the phone provisionally accepts the TLS server certificate and both sides display a 48-bit verification code derived from both certificate fingerprints. The user must compare the codes and confirm on both devices; accepting a mismatched code defeats this protection. The TLS handshake verifies possession of both private keys.
+TLS 1.3 encrypts and authenticates TCP connections. Previously paired devices pin each other's certificate identities. During IP enrollment, the phone provisionally accepts the TLS server certificate and both sides display a 48-bit verification code derived from both certificate fingerprints. The user must compare the codes and confirm on both devices; accepting a mismatched code defeats this protection. The TLS handshake verifies possession of both private keys.
 
 Pairing is only possible while explicitly enabled locally, for 120 seconds. A request consumes the window. Windows approval and an explicit phone confirmation are both required before the server persists the phone fingerprint. Names are bounded labels, not identities. No clipboard data is exposed before enrollment.
 
-Default TCP source filtering is for operational convenience, not authentication or a complete network boundary. TLS and enrollment are always required. Public mode does not remove authentication. No UPnP rule, router setting, Windows firewall exception or Bluetooth system bond is created automatically.
+Default TCP source filtering is for operational convenience, not authentication or a complete network boundary. TLS and enrollment are always required. Public mode does not remove authentication. No UPnP rule, router setting, or Windows firewall exception is created automatically.
 
 ## Stored information
 
@@ -20,7 +20,7 @@ The Shizuku component has a narrow AIDL surface and performs only clipboard-rela
 
 ## Resource abuse
 
-The server accepts up to eight concurrent transport sessions / handshakes. TCP connection attempts are limited per source before TLS (12 per minute, at most 256 rate-limit entries), messages have fixed maximum sizes, names have a small limit, and clipboard submissions are limited to 32 per second per peer. Peers exceeding limits / lagging behind the bounded bus are disconnected. Bluetooth has a bounded async bridge. TLS / application handshakes and network writes have deadlines.
+The server accepts up to eight concurrent transport sessions / handshakes. TCP connection attempts are limited per source before TLS (12 per minute, at most 256 rate-limit entries), messages have fixed maximum sizes, names have a small limit, and clipboard submissions are limited to 32 per second per peer. Peers exceeding limits / lagging behind the bounded bus are disconnected. TLS / application handshakes and network writes have deadlines.
 
 These measures bound normal application work; they do not make a publicly reachable PC immune to volumetric denial of service. Firewall / router boundaries remain outside this application's control.
 

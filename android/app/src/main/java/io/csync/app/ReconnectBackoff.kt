@@ -1,12 +1,17 @@
 package io.csync.app
 
 import kotlin.random.Random
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.withTimeoutOrNull
 
 internal suspend fun awaitReconnect(changes: ReceiveChannel<Unit>, delayMs: Long?): Boolean {
-    if (delayMs == null) { changes.receive(); return true }
-    return withTimeoutOrNull(delayMs) { changes.receive(); true } == true
+    suspend fun receiveChange(): Boolean {
+        if (changes.receiveCatching().isClosed) throw CancellationException("Network monitoring stopped")
+        return true
+    }
+    if (delayMs == null) return receiveChange()
+    return withTimeoutOrNull(delayMs) { receiveChange() } == true
 }
 
 // Coroutine delays do not wake a sleeping device. No alarms, polling or wake locks.
