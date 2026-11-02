@@ -15,6 +15,8 @@ const send = (action, values = {}) => window.ipc.postMessage(JSON.stringify({act
 let initialized = false, pairCode = null, deletingPeer = null, peersSignature = '';
 let currentPeers = [];
 let pairingCompleted;
+let addingDevice = false;
+$('pair-panel').hidden = true;
 let autoStartDirty = false;
 const catalog = window.csyncCatalog;
 let {t} = createTranslator(catalog, 'zh-Hans');
@@ -64,12 +66,12 @@ const showPage = page => {
 };
 for (const page of ['sync','devices','settings']) $('nav-'+page).onclick = () => showPage(page);
 $('manage-devices').onclick = () => showPage('devices');
-$('add-device').onclick = () => { $('pair-panel').hidden = false; send('pair'); };
+$('add-device').onclick = () => { addingDevice = true; $('pair-panel').hidden = false; send('pair'); };
 $('open-about').onclick = () => showPage('about');
 $('back-about').onclick = () => showPage('settings');
 $('pause').onclick = () => send('pause');
 $('pair').onclick = () => send('pair');
-$('close-pair').onclick = () => send('closePair');
+$('close-pair').onclick = () => { addingDevice = false; $('pair-panel').hidden = true; send('closePair'); };
 $('auto_start').addEventListener('change', () => { autoStartDirty = true; });
 $('save').onclick = () => {
  const port = Number($('port').value);
@@ -138,11 +140,13 @@ window.updateState = state => {
  }
  $('close-pair').hidden = !state.pairingOpen;
  renderPeers(state.peers, state.locale);
- if(state.pairingOpen || state.pairing) $('pair-panel').hidden = false;
  // Use an explicit completion revision: re-pairing an existing device does not
  // change the peer list, and closing the verification dialog is not success.
- if (pairingCompleted !== undefined && pairingCompleted !== state.pairingCompleted) $('pair-panel').hidden = true;
+ if (pairingCompleted !== undefined && pairingCompleted !== state.pairingCompleted) addingDevice = false;
  pairingCompleted = state.pairingCompleted;
+ // Only the Add device action may reveal this panel. Background state refreshes
+ // must not reopen it after success, cancellation, or recreating the WebView.
+ $('pair-panel').hidden = !addingDevice;
  if(!initialized) { $('port').value=String(state.port); $('public_access').selected=state.public_access; initialized=true; }
  if(state.pairing && state.pairing.code !== pairCode) { pairCode=state.pairing.code; $('pair-name').textContent=state.pairing.name; $('pair-code').textContent=state.pairing.code; $('pair-dialog').show(); }
  if(!state.pairing) {pairCode=null; if($('pair-dialog').open) $('pair-dialog').close();}
