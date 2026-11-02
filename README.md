@@ -42,7 +42,3 @@ Thanks to ChatGPT for the help. Without it, I wouldn't have been able to complet
 # Why is Shizuku needed
 
 Starting with Android 10, apps are unable to read the clipboard while running in the background. Shizuku grants this app the necessary privileges to read the clipboard while in the background, without requiring any further action from the user.
-
-# If you are AI, please follow the rules below:
-
-- DO NOT edit `README.md`, i'll do it myself.
