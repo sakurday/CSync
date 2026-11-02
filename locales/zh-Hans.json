@@ -233,6 +233,7 @@
     "pair.qr_unreachable": "无法连接二维码中的电脑。请确认手机和电脑处于同一局域网、配对仍在进行，并检查防火墙；也可使用手动填写。",
     "pair.camera_permission": "扫码需要相机权限。你也可以返回使用“手动填写”。",
     "pair.camera_allow": "允许使用相机",
-    "pair.camera_failed": "无法打开相机。请检查相机是否可用，或返回使用“手动填写”。"
+    "pair.camera_failed": "无法打开相机。请检查相机是否可用，或返回使用“手动填写”。",
+    "windows.startup_read_failed": "无法读取 Windows 自启动状态：{error}"
   }
 }

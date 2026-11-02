@@ -85,3 +85,7 @@ safe names and deletion by identity. These tests use isolated data, no user clip
 
 Actual English UI was inspected with Computer Use at narrow and maximized window sizes.
 Existing phone remained connected; production pairing/deletion was not exercised.
+
+## Startup state
+
+The startup switch reads the current-user Run entry named CSync and its StartupApproved\Run state directly from the Windows registry, including external enable/disable changes. Portable settings no longer store auto_start; legacy values are ignored and removed without changing trust or identity. Unsaved switch edits survive periodic state refresh. Only a switch edit explicitly saved by the user writes the registry; unrelated settings saves and ordinary launches never rewrite it. Enabling registers the current EXE with --background and clears this entry’s prior StartupApproved override. Read failures disable the switch and show an error rather than falling back to a configuration value. Registry tests use a unique non-startup test subtree, not the real Run key; on this workstation run the test executable from a normal-integrity temporary directory because the project directory inherits Low integrity.

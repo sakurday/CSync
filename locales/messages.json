@@ -978,5 +978,11 @@
   "pair.camera_failed": {
     "description": "Android：相机打开失败",
     "parameters": []
+  },
+  "windows.startup_read_failed": {
+    "description": "Windows：无法读取系统自启动状态，禁用开关并展示实际错误",
+    "parameters": [
+      "error"
+    ]
   }
 }

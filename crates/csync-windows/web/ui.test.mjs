@@ -13,7 +13,8 @@ test('desktop navigation, safe device names, and deletion by identity', () => {
     setAttribute(key, value) { this.attributes[key] = value; }
     getAttribute(key) { return this.attributes[key]; }
     removeAttribute(key) { delete this.attributes[key]; }
-    addEventListener() {}
+    listeners = {};
+    addEventListener(type, listener) { this.listeners[type] = listener; }
     show() { this.open = true; }
     close() { this.open = false; }
   }
@@ -27,7 +28,25 @@ test('desktop navigation, safe device names, and deletion by identity', () => {
   const source = readFileSync(new URL('app.js', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '');
   vm.runInNewContext(source, {window, document, createTranslator, materialIcon: name => materialIcon(name, document)});
   const peers = [{id: 'first', name: '<img onerror=alert(1)>', online: true}, {id: 'second', name: '<img onerror=alert(1)>', online: false}];
-  const state = {peers, locale: 'en-US', language: 'en-US', addresses: [], port: 45876, runningPort: 45876, pairingCompleted: 0};
+  const state = {peers, locale: 'en-US', language: 'en-US', addresses: [], port: 45876, runningPort: 45876, pairingCompleted: 0, auto_start: false, public_access: false};
+  window.updateState(state);
+  assert.equal(get('auto_start').selected, false);
+  window.updateState({...state, auto_start: true});
+  assert.equal(get('auto_start').selected, true, 'external registry changes refresh the switch');
+  get('save').onclick();
+  assert.equal(Object.hasOwn(sent.at(-1), 'auto_start'), false, 'unrelated saves must not rewrite startup');
+  get('auto_start').selected = false;
+  get('auto_start').listeners.change();
+  window.updateState({...state, auto_start: true});
+  assert.equal(get('auto_start').selected, false, 'refresh must preserve an unsaved user edit');
+  get('save').onclick();
+  assert.equal(sent.at(-1).auto_start, false);
+  window.updateState(state);
+  get('save').onclick();
+  assert.equal(Object.hasOwn(sent.at(-1), 'auto_start'), false);
+  window.updateState({...state, auto_start: null, startupError: 'registry read failed'});
+  assert.equal(get('auto_start').disabled, true);
+  assert.equal(get('notice').textContent, 'registry read failed');
   window.updateState(state);
   get('nav-devices').onclick();
   assert.equal(get('device-page').hidden, false);

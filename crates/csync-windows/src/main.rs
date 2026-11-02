@@ -8,6 +8,7 @@ mod clipboard;
 mod clipboard_tests;
 mod i18n;
 mod server;
+mod startup;
 mod storage;
 #[cfg(test)]
 mod tests;

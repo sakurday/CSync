@@ -15,6 +15,7 @@ const send = (action, values = {}) => window.ipc.postMessage(JSON.stringify({act
 let initialized = false, pairCode = null, deletingPeer = null, peersSignature = '';
 let currentPeers = [];
 let pairingCompleted;
+let autoStartDirty = false;
 const catalog = window.csyncCatalog;
 let {t} = createTranslator(catalog, 'zh-Hans');
 function localize(locale) {
@@ -69,11 +70,13 @@ $('back-about').onclick = () => showPage('settings');
 $('pause').onclick = () => send('pause');
 $('pair').onclick = () => send('pair');
 $('close-pair').onclick = () => send('closePair');
+$('auto_start').addEventListener('change', () => { autoStartDirty = true; });
 $('save').onclick = () => {
  const port = Number($('port').value);
  if (!Number.isInteger(port) || port < 1 || port > 65535) { $('port').error = true; $('port').errorText = t('windows.invalid_port'); return; }
  $('port').error = false;
- send('save', {port,...Object.fromEntries(['public_access','auto_start'].map(key => [key,$(key).selected]))});
+ send('save', {port, public_access: $('public_access').selected,
+   ...(autoStartDirty && !$('auto_start').disabled ? {auto_start: $('auto_start').selected} : {})});
 };
 function updateDeleteDialog() {
  const peer = currentPeers.find(peer => peer.id === deletingPeer);
@@ -119,7 +122,12 @@ window.updateState = state => {
  $('pause').textContent = t(state.paused ? 'sync.resume' : 'sync.pause');
  $('addresses').textContent = state.addresses.join(' · ') || t('windows.no_addresses');
  $('endpoint').textContent = t(state.port !== state.runningPort ? 'windows.endpoint_pending' : 'windows.endpoint', {port: state.runningPort, savedPort: state.port});
- $('notice').textContent = state.status;
+ $('notice').textContent = state.startupError || state.status;
+ $('auto_start').disabled = typeof state.auto_start !== 'boolean';
+ if (typeof state.auto_start === 'boolean' && (!autoStartDirty || $('auto_start').selected === state.auto_start)) {
+   $('auto_start').selected = state.auto_start;
+   autoStartDirty = false;
+ }
  $('pair-state').textContent = t(state.pairingOpen ? 'windows.pair_open' : 'windows.pair_closed');
  $('pair').disabled = state.pairingOpen;
  $('pair-qr-panel').hidden = !state.pairingOpen || !state.pairingQr;
@@ -135,7 +143,7 @@ window.updateState = state => {
  // change the peer list, and closing the verification dialog is not success.
  if (pairingCompleted !== undefined && pairingCompleted !== state.pairingCompleted) $('pair-panel').hidden = true;
  pairingCompleted = state.pairingCompleted;
- if(!initialized) { $('port').value=String(state.port); for(const key of ['public_access','auto_start']) $(key).selected=state[key]; initialized=true; }
+ if(!initialized) { $('port').value=String(state.port); $('public_access').selected=state.public_access; initialized=true; }
  if(state.pairing && state.pairing.code !== pairCode) { pairCode=state.pairing.code; $('pair-name').textContent=state.pairing.name; $('pair-code').textContent=state.pairing.code; $('pair-dialog').show(); }
  if(!state.pairing) {pairCode=null; if($('pair-dialog').open) $('pair-dialog').close();}
 };

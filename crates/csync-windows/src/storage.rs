@@ -8,7 +8,7 @@ use std::{
     path::{Path, PathBuf},
     ptr::null_mut,
 };
-use windows_sys::Win32::{Foundation::LocalFree, Security::Cryptography::*, System::Registry::*};
+use windows_sys::Win32::{Foundation::LocalFree, Security::Cryptography::*};
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -17,7 +17,6 @@ pub struct Config {
     pub name: String,
     pub port: u16,
     pub public_access: bool,
-    pub auto_start: bool,
     pub peers: BTreeMap<String, String>,
 }
 impl Default for Config {
@@ -27,7 +26,6 @@ impl Default for Config {
             name: std::env::var("COMPUTERNAME").unwrap_or_else(|_| "Windows".into()),
             port: DEFAULT_PORT,
             public_access: false,
-            auto_start: false,
             peers: BTreeMap::new(),
         }
     }
@@ -71,8 +69,8 @@ impl Store {
         if path.exists() {
             let stored: serde_json::Value = serde_json::from_slice(&std::fs::read(path)?)?;
             let config = serde_json::from_value(stored.clone())?;
-            // Retire the old transport flag without changing trusted peers or identity files.
-            if stored.get("bluetooth").is_some() {
+            // Startup belongs to the registry. Retire legacy flags while preserving trust.
+            if stored.get("bluetooth").is_some() || stored.get("auto_start").is_some() {
                 self.save(&config)?;
             }
             Ok(config)
@@ -157,11 +155,11 @@ mod storage_tests {
         config.name = "Existing computer".into();
         config.port = 45879;
         config.public_access = true;
-        config.auto_start = true;
         config.language = "zh-Hans".into();
         config.peers.insert("a".repeat(64), "Existing phone".into());
         let mut legacy = serde_json::to_value(&config).unwrap();
         legacy["bluetooth"] = true.into();
+        legacy["auto_start"] = true.into();
         std::fs::write(
             root.join("settings.json"),
             serde_json::to_vec(&legacy).unwrap(),
@@ -184,9 +182,29 @@ mod storage_tests {
                 .get("bluetooth")
                 .is_none()
         );
+        assert!(
+            serde_json::from_slice::<serde_json::Value>(&saved)
+                .unwrap()
+                .get("auto_start")
+                .is_none()
+        );
         store.config().unwrap();
         assert_eq!(std::fs::read(root.join("settings.json")).unwrap(), saved);
         std::fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn legacy_startup_preference_is_ignored_without_other_migrations() {
+        let mut value = serde_json::to_value(Config::default()).unwrap();
+        for legacy in [true, false] {
+            value["auto_start"] = legacy.into();
+            let config: Config = serde_json::from_value(value.clone()).unwrap();
+            assert!(
+                serde_json::to_value(config)
+                    .unwrap()
+                    .get("auto_start")
+                    .is_none()
+            );
+        }
     }
     #[test]
     fn migration_preserves_identity_and_trust_and_keeps_originals() {
@@ -296,45 +314,4 @@ fn crypt(bytes: &[u8], encrypt: bool) -> Result<Vec<u8>> {
         LocalFree(output.pbData.cast());
         Ok(result)
     }
-}
-
-pub fn set_startup(enabled: bool) -> Result<()> {
-    unsafe {
-        let mut key = null_mut();
-        ensure!(
-            RegCreateKeyExW(
-                HKEY_CURRENT_USER,
-                wide("Software\\Microsoft\\Windows\\CurrentVersion\\Run").as_ptr(),
-                0,
-                std::ptr::null(),
-                0,
-                KEY_SET_VALUE,
-                std::ptr::null(),
-                &mut key,
-                null_mut()
-            ) == 0,
-            "cannot open startup settings"
-        );
-        let name = wide("CSync");
-        let status = if enabled {
-            let cmd = wide(&format!(
-                "\"{}\" --background",
-                std::env::current_exe()?.display()
-            ));
-            RegSetValueExW(
-                key,
-                name.as_ptr(),
-                0,
-                REG_SZ,
-                cmd.as_ptr().cast(),
-                (cmd.len() * 2) as u32,
-            )
-        } else {
-            let status = RegDeleteValueW(key, name.as_ptr());
-            if status == 2 { 0 } else { status }
-        };
-        RegCloseKey(key);
-        ensure!(status == 0, "cannot update startup settings");
-    }
-    Ok(())
 }

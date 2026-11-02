@@ -236,6 +236,7 @@
     "pair.qr_unreachable": "Cannot connect to this computer. Check that both devices are on the same local network, pairing is still open, and the firewall allows CSync. You can also enter the address manually.",
     "pair.camera_permission": "Camera permission is required to scan. You can also go back and choose Enter manually.",
     "pair.camera_allow": "Allow camera access",
-    "pair.camera_failed": "Cannot open the camera. Check camera availability, or go back and enter the address manually."
+    "pair.camera_failed": "Cannot open the camera. Check camera availability, or go back and enter the address manually.",
+    "windows.startup_read_failed": "Could not read Windows startup status: {error}"
   }
 }

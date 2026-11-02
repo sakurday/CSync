@@ -2,7 +2,8 @@ use crate::i18n::{msg, tr};
 use crate::{
     clipboard::Clipboard,
     server::{Host, UiEvent, UiSink, WAKE},
-    storage::{Store, set_startup, wide},
+    startup::{set_startup, startup_enabled},
+    storage::{Store, wide},
 };
 use anyhow::{Context, Result, ensure};
 use csync_core::protocol::Clip;
@@ -257,6 +258,13 @@ unsafe fn refresh(_hwnd: HWND, app: &App) {
             .as_ref()
             .map(|(code, name, _, _)| serde_json::json!({"code":code,"name":name}));
         let pairing_open = app.host.trust.lock().unwrap().pairing_open();
+        let startup = startup_enabled();
+        let startup_error = startup.as_ref().err().map(|error| {
+            tr(
+                "windows.startup_read_failed",
+                &[("error", format!("{error:#}"))],
+            )
+        });
         let state = serde_json::json!({
             "version": env!("CARGO_PKG_VERSION"),
             "paused": app.host.paused.load(Ordering::Relaxed),
@@ -270,7 +278,8 @@ unsafe fn refresh(_hwnd: HWND, app: &App) {
             })).collect::<Vec<_>>(),
             "port": config.port, "runningPort": app.running_port,
             "public_access": config.public_access,
-            "auto_start": config.auto_start,
+            "auto_start": startup.ok(),
+            "startupError": startup_error,
             "addresses": local_addresses().unwrap_or_default(),
             "pairingOpen": pairing_open,
             "pairingCompleted": app.pairing_completed,
@@ -341,9 +350,10 @@ unsafe fn command(hwnd: HWND, app: &mut App, body: &str) -> Result<()> {
                 .ok_or_else(|| anyhow::anyhow!(tr("windows.port_range", &[])))?;
             next.port = port as u16;
             next.public_access = value["public_access"].as_bool().unwrap_or(false);
-            next.auto_start = value["auto_start"].as_bool().unwrap_or(false);
             let restart = next.port != config.port;
-            set_startup(next.auto_start)?;
+            if let Some(enabled) = value["auto_start"].as_bool() {
+                set_startup(enabled)?;
+            }
             app.host.store.save(&next)?;
             *config = next;
             drop(config);
@@ -438,7 +448,7 @@ unsafe extern "system" fn window_proc(hwnd: HWND, message: u32, w: WPARAM, l: LP
                         "error.details",
                         &[
                             ("summary", msg("windows.operation_failed", &[])),
-                            ("error", error.to_string()),
+                            ("error", format!("{error:#}")),
                         ],
                     ));
                 }
