@@ -1,51 +1,33 @@
 # CSync
 
-[简体中文](./README/zh_cn.md)
-
 ![](./README/1.png)
 
 Synchronize your clipboard in real time between Windows and Android devices.
 
 CSync is very small and only has the function of syncing the clipboard.
 
-# Currently available features
+# Requirements
 
-## Implemented features
+- Windows: Windows 11
 
-- Pair devices and sync the clipboard over a local area network (LAN)
+- Android: Android 12 or above with [Shizuku](https://github.com/RikkaApps/Shizuku/releases) installed
 
-## Unverified functionality
+- Your phone and computer must be on the same local area network.
 
-- Sync the clipboard via the public internet
+# Features
 
-# Why I decided to develop this software
-
-Nowadays, there are many software applications that can synchronize the clipboard across devices, but all of them have certain drawbacks:
-
-- KDE Connect: Due to restrictions in Android 10 and later, syncing the clipboard while the app is in the background requires additional permissions—something KDE Connect is unable to obtain.
-
-- Sefirah: This software has a serious bug on my computer that prevents pairing and causes high CPU usage. I’m not sure if this issue occurs on other computers as well.
-
-- WeChat IM: This is commercial software. You never know what Tencent might do with your data.
-
-- Apple/Huawei Sync：An excellent clipboard synchronization method, but with one drawback: it only supports synchronization between devices of the same brand.
-
-# Features of CSync
-
-- Extremely low resource usage
-
-Built using high-performance Rust and Kotlin, resulting in exceptionally low resource usage.
-
-You may need Edge installed in your PC because CSync uses your Edge webview as WebUI.
+- Extremely low resource usage, powered by Rust and Kotlin
 
 | resource usage | Windows  | Android  |
 |-|-|-|
 | RAM usage | about 5MB | about 60MB |
-| Disk usage | about 2MB | about 3MB |
+| Disk usage | about 3MB | about 5MB |
 
-- By utilizing Shizuku, CSync bypasses Android system limitations to enable background synchronization.
+- Quickly pair and connect: Connect to the same LAN and scan the QR code to pair.
 
-- Designing the interface with Material Design 3 results in an aesthetically pleasing and clear UI.
+- Background sync: Synchronize your clipboard immediately, even CSync in background
+
+- Clear and beautiful UI: Material 3 Design
 
 # What I’d like to say
 
