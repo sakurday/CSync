@@ -28,6 +28,7 @@ pub const WAKE: u32 = 0x8000 + 7;
 
 pub enum UiEvent {
     Refresh,
+    Paired,
     Pair {
         pin: String,
         name: String,
@@ -246,10 +247,15 @@ pub async fn connection(host: Arc<Host>, stream: TcpStream) -> Result<()> {
     {
         ensure!(version == VERSION, "unsupported pairing request");
         ensure!(valid_name(&name), "invalid device name");
-        ensure!(
-            token.is_empty() && host.trust.lock().unwrap().consume_ip_pairing(),
-            "pairing expired or invalid"
-        );
+        let accepted = {
+            let mut trust = host.trust.lock().unwrap();
+            if token.is_empty() {
+                trust.consume_ip_pairing()
+            } else {
+                trust.consume_pairing(&token)
+            }
+        };
+        ensure!(accepted, "pairing expired or invalid");
         host.ui.send(UiEvent::Refresh);
         let (tx, rx) = oneshot::channel();
         host.ui.send(UiEvent::Pair {
@@ -288,7 +294,9 @@ pub async fn connection(host: Arc<Host>, stream: TcpStream) -> Result<()> {
                 .save(&next)
                 .context(tr("windows.pair_save_failed", &[]))?;
             *config = next;
-            host.trust.lock().unwrap().peers.insert(pin.clone());
+            let mut trust = host.trust.lock().unwrap();
+            trust.peers.insert(pin.clone());
+            trust.close_pairing();
             Ok(())
         })();
         if let Err(error) = saved {
@@ -311,7 +319,7 @@ pub async fn connection(host: Arc<Host>, stream: TcpStream) -> Result<()> {
             },
         )
         .await?;
-        host.ui.send(UiEvent::Refresh);
+        host.ui.send(UiEvent::Paired);
         return Ok(());
     }
     ensure!(

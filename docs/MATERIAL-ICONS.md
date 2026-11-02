@@ -16,7 +16,7 @@ device avatars, settings for Settings, and delete on individual deletion buttons
 The compact desktop rail retains both icons and text labels.
 
 All UI symbols now come from the supplied SVGs, including sync, computer,
-add and chevron_right added on 2026-11-02. Android's chevron retains autoMirrored
+add, chevron_right, qr_code and qr_code_scanner added on 2026-11-02. The QR code icon labels the desktop pairing QR; the scanner icon labels the Android scan action. Android's chevron retains autoMirrored
 for right-to-left layouts. The CSync launcher/window/tray/notification/About brand
 assets remain derived from `icon_512.png`.
 

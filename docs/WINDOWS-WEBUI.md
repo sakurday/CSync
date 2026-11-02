@@ -6,7 +6,7 @@ the settings window is opened. Closing the window drops the WebView and rejects 
 outstanding pairing request; the host keeps syncing. Reopening reconstructs the UI.
 When the tray cannot be registered, closing the window exits instead of leaving an
 unreachable background process; background startup opens the window in that case.
-Settings also provides an explicit Exit button. Tray registration retries every
+Exit is available from the system tray. Tray registration retries every
 5 seconds on failure and is refreshed every 30 seconds after success.
 
 The Sync, Devices and Settings pages use Google `@material/web` 2.5.0 components. The sidebar and cards are
@@ -68,10 +68,10 @@ able to overwrite it; do not broaden folder permissions to work around this.
 The persistent left navigation opens Sync, Devices and Settings. Devices owns IP
 pairing and individual removal; there is no priority, sorting control or active-device
 selector. The server continues broadcasting to all connected, trusted devices.
-The sidebar becomes a compact labeled rail below 840px; content is capped at 960px.
+The default window size is 1300 × 1000 pixels. The sidebar becomes a compact labeled rail below 840px; content is capped at 960px.
 Light/dark tonal surfaces, shape tokens and reduced-motion support use Material 3.
 
-Add device opens the pairing panel and the existing 120-second pairing window.
+Add device opens the pairing panel, immediately starts the 120-second pairing window and shows a locally generated QR code containing private IPv4 candidates, the listening port, server certificate fingerprint and a one-time token. The code disappears on use, cancellation or expiry. The scan heading and QR code appear at the top of the connection card, before the manual address and port. Manual host/port entry remains available. Successful enrollment closes pairing and hides the connection panel; adding another device requires clicking Add device again.
 Both peers still verify the same code. Delete device shows a confirmation and sends
 `deletePeer` with the certificate identity, never a display name or row index.
 The server persists removal before revoking trust, then broadcasts a session change;

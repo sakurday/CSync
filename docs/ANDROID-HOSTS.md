@@ -33,3 +33,7 @@ changed and restored, under the existing enabled/unpaused configuration. This
 UI test simulates state publication; it does not claim to exercise TLS or clipboard
 sync. After this test, a separate real service reconnect and connected home title
 were verified on the existing paired phone. No clipboard content was written.
+
+## QR enrollment (2026-11-02)
+
+The Hosts destination has Scan to add above Enter manually. The non-exported ScannerActivity requests camera permission only when opened, uses lifecycle-bound CameraX preview and ZXing QR decoding, and releases the camera when closed. Frames stay in memory. Denied permission or unavailable camera leaves manual entry available. PairingQr validates the version, bounded private IPv4 list, port, fingerprint and token before connecting. Scan pairing keeps the existing two-device verification and saves only the connected endpoint and certificate identity after successful enrollment.

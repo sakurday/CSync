@@ -226,6 +226,16 @@
     "windows.delete_device_hint": "Deleting {device} disconnects it and requires it to pair again before syncing. Other devices are not affected.",
     "windows.device_online": "Connected",
     "windows.device_offline": "Not connected",
-    "windows.clipboard_privacy": "Only plain text is synced. No clipboard history is saved."
+    "windows.clipboard_privacy": "Only plain text is synced. No clipboard history is saved.",
+    "hosts.manual": "Enter manually",
+    "pair.scan_add": "Scan to add",
+    "pair.scan_hint": "Scan the QR code shown on your computer under Devices → Add device → Start pairing.",
+    "pair.qr_alt": "Phone pairing QR code",
+    "pair.qr_hint": "Scan with CSync on your phone, or enter the address and port below manually. This code expires when pairing ends and can only be used once.",
+    "pair.qr_invalid": "This is not a valid CSync pairing code. Scan the pairing code on your computer.",
+    "pair.qr_unreachable": "Cannot connect to this computer. Check that both devices are on the same local network, pairing is still open, and the firewall allows CSync. You can also enter the address manually.",
+    "pair.camera_permission": "Camera permission is required to scan. You can also go back and choose Enter manually.",
+    "pair.camera_allow": "Allow camera access",
+    "pair.camera_failed": "Cannot open the camera. Check camera availability, or go back and enter the address manually."
   }
 }

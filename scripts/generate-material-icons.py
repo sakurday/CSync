@@ -15,7 +15,7 @@ SVG = "{http://www.w3.org/2000/svg}"
 def generate():
     symbols = {}
     for name in ("settings", "mobile", "menu", "error", "delete", "check_circle",
-                 "sync", "computer", "add", "chevron_right"):
+                 "sync", "computer", "add", "chevron_right", "qr_code", "qr_code_scanner"):
         source = ROOT / "icons" / f"{name}_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.svg"
         svg = ET.parse(source).getroot()
         assert svg.attrib["viewBox"] == "0 0 24 24", source

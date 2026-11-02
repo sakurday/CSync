@@ -243,6 +243,62 @@ async fn tls_pairing_roundtrip_replay_origin_and_revocation() {
 }
 
 #[tokio::test]
+async fn qr_pairing_consumes_only_valid_token_and_rejects_replay() {
+    let (host, ui) = host(&format!("qr-test-{}", uuid::Uuid::new_v4()), 0);
+    mock_ui(&host, ui, None);
+    let (port, task) = listener(host.clone(), 0).await;
+    let phone = client(&host);
+    let token = host.trust.lock().unwrap().open_pairing();
+    for candidate in ["invalid".to_string(), token.clone()] {
+        let mut link = phone.connect(port).await.unwrap();
+        write_message(
+            &mut link,
+            &Message::Pair {
+                version: VERSION,
+                token: candidate.clone(),
+                name: "QR phone".into(),
+            },
+        )
+        .await
+        .unwrap();
+        if candidate != token {
+            assert!(read_message(&mut link).await.is_err());
+            assert!(host.trust.lock().unwrap().pairing_open());
+            assert!(!host.store.config().unwrap().peers.contains_key(&phone.id));
+            continue;
+        }
+        assert!(matches!(
+            read_message(&mut link).await.unwrap(),
+            Message::PairChallenge
+        ));
+        assert!(!host.trust.lock().unwrap().pairing_open());
+        assert!(!host.store.config().unwrap().peers.contains_key(&phone.id));
+        write_message(&mut link, &Message::PairConfirm)
+            .await
+            .unwrap();
+        assert!(matches!(
+            read_message(&mut link).await.unwrap(),
+            Message::Paired { .. }
+        ));
+    }
+    assert!(host.store.config().unwrap().peers.contains_key(&phone.id));
+    let mut replay = phone.connect(port).await.unwrap();
+    write_message(
+        &mut replay,
+        &Message::Pair {
+            version: VERSION,
+            token,
+            name: "replay".into(),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(read_message(&mut replay).await.is_err());
+    assert!(phone.hello(port).await.is_ok());
+    task.abort();
+}
+
+#[tokio::test]
 async fn deleting_one_device_preserves_other_sessions_and_saved_trust() {
     let (host, ui) = host(&format!("delete-peer-{}", uuid::Uuid::new_v4()), 0);
     mock_ui(&host, ui, None);

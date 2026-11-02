@@ -11,6 +11,8 @@ test('desktop navigation, safe device names, and deletion by identity', () => {
     append(...nodes) { this.children.push(...nodes); }
     replaceChildren(...nodes) { this.children = nodes; }
     setAttribute(key, value) { this.attributes[key] = value; }
+    getAttribute(key) { return this.attributes[key]; }
+    removeAttribute(key) { delete this.attributes[key]; }
     addEventListener() {}
     show() { this.open = true; }
     close() { this.open = false; }
@@ -25,7 +27,7 @@ test('desktop navigation, safe device names, and deletion by identity', () => {
   const source = readFileSync(new URL('app.js', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '');
   vm.runInNewContext(source, {window, document, createTranslator, materialIcon: name => materialIcon(name, document)});
   const peers = [{id: 'first', name: '<img onerror=alert(1)>', online: true}, {id: 'second', name: '<img onerror=alert(1)>', online: false}];
-  const state = {peers, locale: 'en-US', language: 'en-US', addresses: [], port: 45876, runningPort: 45876};
+  const state = {peers, locale: 'en-US', language: 'en-US', addresses: [], port: 45876, runningPort: 45876, pairingCompleted: 0};
   window.updateState(state);
   get('nav-devices').onclick();
   assert.equal(get('device-page').hidden, false);
@@ -44,6 +46,21 @@ test('desktop navigation, safe device names, and deletion by identity', () => {
   get('add-device').onclick();
   assert.equal(get('pair-panel').hidden, false);
   assert.deepEqual(sent.at(-1), {action: 'pair'});
+  window.updateState({...state, pairingOpen: true, pairingQr: 'data:image/svg+xml;base64,test'});
+  assert.equal(get('pair-qr-panel').hidden, false);
+  assert.equal(get('pair-qr').getAttribute('src'), 'data:image/svg+xml;base64,test');
+  window.updateState({...state, pairingOpen: false});
+  assert.equal(get('pair-qr-panel').hidden, true);
+  assert.equal(get('pair-qr').getAttribute('src'), undefined);
+  assert.equal(get('pair-panel').hidden, false, 'closed pairing window alone is not successful enrollment');
+  window.updateState({...state, pairingCompleted: 1, pairingOpen: false});
+  assert.equal(get('pair-panel').hidden, true, 'success hides the panel even when the peer list is unchanged');
+  get('add-device').onclick();
+  assert.equal(get('pair-panel').hidden, false);
+  assert.deepEqual(sent.at(-1), {action: 'pair'});
+  window.updateState({...state, pairingCompleted: 1, pairingOpen: true, pairingQr: 'data:image/svg+xml;base64,next'});
+  assert.equal(get('pair-panel').hidden, false);
+  assert.equal(get('pair-qr-panel').hidden, false);
   rows[0].children[2].onclick();
   window.updateState({...state, peers: []});
   assert.equal(get('devices-empty').hidden, false);

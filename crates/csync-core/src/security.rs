@@ -147,4 +147,14 @@ mod tests {
         trust.close_pairing();
         assert!(!trust.consume_pairing(&token));
     }
+    #[test]
+    fn expired_and_replaced_pairing_tokens_are_rejected() {
+        let mut trust = Trust::new([]);
+        let old = trust.open_pairing();
+        let current = trust.open_pairing();
+        assert!(!trust.consume_pairing(&old));
+        trust.pairing.as_mut().unwrap().1 = Instant::now() - Duration::from_secs(1);
+        assert!(!trust.consume_pairing(&current));
+        assert!(!trust.consume_ip_pairing());
+    }
 }

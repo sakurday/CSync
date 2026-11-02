@@ -40,6 +40,8 @@ struct App {
     taskbar_created: u32,
     running_port: u16,
     tray_registered: Option<bool>,
+    pairing_qr: Option<String>,
+    pairing_completed: u64,
 }
 
 pub fn show_error(message: &str) {
@@ -101,8 +103,8 @@ pub fn run() -> Result<()> {
             WS_OVERLAPPEDWINDOW,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
+            1300,
             1000,
-            810,
             null_mut(),
             null_mut(),
             instance,
@@ -123,6 +125,8 @@ pub fn run() -> Result<()> {
             taskbar_created: RegisterWindowMessageW(wide("TaskbarCreated").as_ptr()),
             running_port: config.port,
             tray_registered: None,
+            pairing_qr: None,
+            pairing_completed: 0,
         });
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, app.as_mut() as *mut App as isize);
         host.ui.hwnd.store(hwnd as isize, Ordering::Relaxed);
@@ -252,6 +256,7 @@ unsafe fn refresh(_hwnd: HWND, app: &App) {
             .pending_pair
             .as_ref()
             .map(|(code, name, _, _)| serde_json::json!({"code":code,"name":name}));
+        let pairing_open = app.host.trust.lock().unwrap().pairing_open();
         let state = serde_json::json!({
             "version": env!("CARGO_PKG_VERSION"),
             "paused": app.host.paused.load(Ordering::Relaxed),
@@ -267,7 +272,9 @@ unsafe fn refresh(_hwnd: HWND, app: &App) {
             "public_access": config.public_access,
             "auto_start": config.auto_start,
             "addresses": local_addresses().unwrap_or_default(),
-            "pairingOpen": app.host.trust.lock().unwrap().pairing_open(),
+            "pairingOpen": pairing_open,
+            "pairingCompleted": app.pairing_completed,
+            "pairingQr": if pairing_open { app.pairing_qr.as_deref() } else { None },
             "pairing": pairing,
         });
         let serialized = state.to_string();
@@ -344,7 +351,7 @@ unsafe fn command(hwnd: HWND, app: &mut App, body: &str) -> Result<()> {
             app.host.status(if restart {
                 msg("windows.settings_saved_restart", &[])
             } else {
-                msg("windows.settings_saved", &[])
+                String::new()
             });
         }
         _ => anyhow::bail!(tr("windows.unknown_action", &[])),
@@ -401,6 +408,10 @@ unsafe extern "system" fn window_proc(hwnd: HWND, message: u32, w: WPARAM, l: LP
             while let Ok(event) = app.receiver.try_recv() {
                 match event {
                     UiEvent::Refresh => {}
+                    UiEvent::Paired => {
+                        app.pairing_completed += 1;
+                        app.pairing_qr = None;
+                    }
                     UiEvent::Pair { pin, name, reply } => {
                         let code =
                             csync_core::protocol::text_hash(&format!("{}:{pin}", app.host.id))
@@ -556,7 +567,43 @@ unsafe fn begin_pairing(_hwnd: HWND, app: &mut App) -> Result<()> {
         app.host.config.lock().unwrap().port == app.running_port,
         tr("windows.port_restart_required", &[])
     );
-    app.host.trust.lock().unwrap().open_pairing();
+    use base64::Engine;
+    let addresses: Vec<_> = local_addresses()?
+        .into_iter()
+        .filter(|host| {
+            host.parse::<std::net::Ipv4Addr>()
+                .is_ok_and(|ip| ip.is_private())
+        })
+        .take(4)
+        .collect();
+    let token = app.host.trust.lock().unwrap().open_pairing();
+    app.pairing_qr = None;
+    if addresses.is_empty() {
+        return Ok(());
+    }
+    let payload = format!(
+        "CSYNC:{}",
+        serde_json::json!({
+            "v": 1, "hosts": addresses, "port": app.running_port,
+            "pin": app.host.id, "token": token,
+        })
+    );
+    let qr =
+        match qrcode::QrCode::with_error_correction_level(payload.as_bytes(), qrcode::EcLevel::M) {
+            Ok(qr) => qr,
+            Err(error) => {
+                app.host.trust.lock().unwrap().close_pairing();
+                return Err(error.into());
+            }
+        };
+    let svg = qr
+        .render::<qrcode::render::svg::Color>()
+        .min_dimensions(320, 320)
+        .build();
+    app.pairing_qr = Some(format!(
+        "data:image/svg+xml;base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(svg)
+    ));
     Ok(())
 }
 

@@ -938,5 +938,45 @@
   "windows.clipboard_privacy": {
     "description": "Windows：剪贴板隐私说明",
     "parameters": []
+  },
+  "hosts.manual": {
+    "description": "Android：主机页手动添加按钮和弹窗标题",
+    "parameters": []
+  },
+  "pair.scan_add": {
+    "description": "扫码入口标题",
+    "parameters": []
+  },
+  "pair.scan_hint": {
+    "description": "Android：扫码页面提示",
+    "parameters": []
+  },
+  "pair.qr_alt": {
+    "description": "Windows：配对二维码替代文本",
+    "parameters": []
+  },
+  "pair.qr_hint": {
+    "description": "Windows：二维码提示",
+    "parameters": []
+  },
+  "pair.qr_invalid": {
+    "description": "Android：无效二维码",
+    "parameters": []
+  },
+  "pair.qr_unreachable": {
+    "description": "Android：二维码连接失败",
+    "parameters": []
+  },
+  "pair.camera_permission": {
+    "description": "Android：相机权限被拒绝",
+    "parameters": []
+  },
+  "pair.camera_allow": {
+    "description": "Android：请求相机权限按钮",
+    "parameters": []
+  },
+  "pair.camera_failed": {
+    "description": "Android：相机打开失败",
+    "parameters": []
   }
 }

@@ -14,6 +14,7 @@ const $ = id => document.getElementById(id);
 const send = (action, values = {}) => window.ipc.postMessage(JSON.stringify({action,...values}));
 let initialized = false, pairCode = null, deletingPeer = null, peersSignature = '';
 let currentPeers = [];
+let pairingCompleted;
 const catalog = window.csyncCatalog;
 let {t} = createTranslator(catalog, 'zh-Hans');
 function localize(locale) {
@@ -21,21 +22,31 @@ function localize(locale) {
  document.documentElement.lang = locale;
  document.documentElement.dir = catalog[locale]?._meta.direction || 'ltr';
  for (const element of document.querySelectorAll('[data-i18n]')) element.textContent = t(element.dataset.i18n);
- for (const attribute of ['label', 'supporting-text', 'aria-label']) {
+ for (const attribute of ['label', 'supporting-text', 'aria-label', 'alt']) {
    for (const element of document.querySelectorAll(`[data-i18n-${attribute}]`)) element.setAttribute(attribute, t(element.getAttribute(`data-i18n-${attribute}`)));
  }
  if ($('port').error) $('port').errorText = t('windows.invalid_port');
 }
 let renderedLocale;
 const languageOptions = [['system', null], ...Object.entries(catalog).map(([locale, value]) => [locale, value._meta.nativeName])];
+// Keep option identities stable across locale changes. Material Web caches the
+// selected option, and replacing it can clear the field after slot updates.
+const languageElements = languageOptions.map(([locale]) => {
+ const option = document.createElement('md-select-option');
+ option.value = locale;
+ const label = document.createElement('div');
+ label.slot = 'headline';
+ option.append(label);
+ return {option, label};
+});
+$('language').replaceChildren(...languageElements.map(({option}) => option));
 function renderLanguages() {
- $('language').replaceChildren(...languageOptions.map(([locale, name]) => {
-   const option = document.createElement('md-select-option');
-   option.value = locale;
-   const label = document.createElement('div');
-   label.slot = 'headline'; label.textContent = name || t('language.system');
-   option.append(label); return option;
- }));
+ languageElements.forEach(({option, label}, index) => {
+   const text = languageOptions[index][1] || t('language.system');
+   label.textContent = text;
+   // Supply text explicitly so selection does not depend on async slot rendering.
+   option.displayText = text;
+ });
 }
 $('language').addEventListener('change', () => send('language', {language: $('language').value}));
 const showPage = page => {
@@ -56,7 +67,6 @@ $('add-device').onclick = () => { $('pair-panel').hidden = false; send('pair'); 
 $('open-about').onclick = () => showPage('about');
 $('back-about').onclick = () => showPage('settings');
 $('pause').onclick = () => send('pause');
-$('quit').onclick = () => send('quit');
 $('pair').onclick = () => send('pair');
 $('close-pair').onclick = () => send('closePair');
 $('save').onclick = () => {
@@ -112,9 +122,19 @@ window.updateState = state => {
  $('notice').textContent = state.status;
  $('pair-state').textContent = t(state.pairingOpen ? 'windows.pair_open' : 'windows.pair_closed');
  $('pair').disabled = state.pairingOpen;
+ $('pair-qr-panel').hidden = !state.pairingOpen || !state.pairingQr;
+ if (state.pairingQr && state.pairingOpen) {
+   if ($('pair-qr').getAttribute('src') !== state.pairingQr) $('pair-qr').setAttribute('src', state.pairingQr);
+ } else {
+   $('pair-qr').removeAttribute('src');
+ }
  $('close-pair').hidden = !state.pairingOpen;
  renderPeers(state.peers, state.locale);
  if(state.pairingOpen || state.pairing) $('pair-panel').hidden = false;
+ // Use an explicit completion revision: re-pairing an existing device does not
+ // change the peer list, and closing the verification dialog is not success.
+ if (pairingCompleted !== undefined && pairingCompleted !== state.pairingCompleted) $('pair-panel').hidden = true;
+ pairingCompleted = state.pairingCompleted;
  if(!initialized) { $('port').value=String(state.port); for(const key of ['public_access','auto_start']) $(key).selected=state[key]; initialized=true; }
  if(state.pairing && state.pairing.code !== pairCode) { pairCode=state.pairing.code; $('pair-name').textContent=state.pairing.name; $('pair-code').textContent=state.pairing.code; $('pair-dialog').show(); }
  if(!state.pairing) {pairCode=null; if($('pair-dialog').open) $('pair-dialog').close();}

@@ -11,6 +11,7 @@ import android.provider.Settings as SystemSettings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.BackHandler
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.Image
@@ -47,6 +48,12 @@ class MainActivity : ComponentActivity() {
     private var pairing by mutableStateOf(false)
     private var confirmation by mutableStateOf<CompletableDeferred<Boolean>?>(null)
     private var verificationCode by mutableStateOf("")
+    private val scanner = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) {
+            val invitation = runCatching { PairingQr.parse(result.data?.getStringExtra(ScannerActivity.EXTRA_QR) ?: "") }.getOrNull()
+            if (invitation == null) alert(msg("pair.qr_invalid")) else pairScanned(invitation)
+        }
+    }
     private val changed = SharedPreferences.OnSharedPreferenceChangeListener { _, key -> runOnUiThread {
         if (key == "language") I18n.invalidate()
         refresh()
@@ -124,17 +131,26 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     floatingActionButton = {
-                        if (page == 1) ExtendedFloatingActionButton(
-                            onClick = { selectedHost = null; dialog = "pair" },
-                            modifier = Modifier.semantics { contentDescription = tr("hosts.add") },
-                            icon = { Icon(painterResource(R.drawable.ic_material_add), null) },
-                            text = { Text(tr("hosts.add")) }
+                        if (page == 1) Column(verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.End) {
+                        ExtendedFloatingActionButton(
+                            onClick = { if (!pairing) scanner.launch(Intent(this@MainActivity, ScannerActivity::class.java)) },
+                            modifier = Modifier.semantics { contentDescription = tr("pair.scan_add") },
+                            icon = { Icon(painterResource(R.drawable.ic_material_qr_code_scanner), null) },
+                            text = { Text(tr("pair.scan_add")) }
                         )
+                        ExtendedFloatingActionButton(
+                            onClick = { selectedHost = null; dialog = "pair" },
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            modifier = Modifier.semantics { contentDescription = tr("hosts.manual") },
+                            icon = { Icon(painterResource(R.drawable.ic_material_add), null) },
+                            text = { Text(tr("hosts.manual")) }
+                        )
+                        }
                     }
                 ) { padding ->
                     Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
                         Column(Modifier.widthIn(max = 840.dp).fillMaxSize().verticalScroll(scrollStates[page])
-                            .padding(horizontal = if (useRail) 24.dp else 16.dp).padding(top = 8.dp, bottom = if (page == 1) 104.dp else 24.dp),
+                            .padding(horizontal = if (useRail) 24.dp else 16.dp).padding(top = 8.dp, bottom = if (page == 1) 184.dp else 24.dp),
                             verticalArrangement = Arrangement.spacedBy(16.dp)) {
                             if (page == 0) {
                                 if (!batteryExempt) SetupReminder(
@@ -273,7 +289,7 @@ class MainActivity : ComponentActivity() {
                 val editing = if (dialog == "edit") selectedHost else null
                 var host by rememberSaveable(editing?.id) { mutableStateOf(editing?.host ?: "") }
                 var port by rememberSaveable(editing?.id) { mutableStateOf((editing?.port ?: settings.port).toString()) }
-                AlertDialog(onDismissRequest = { dialog = null }, title = { Text(if (editing == null) tr("hosts.add") else tr("hosts.edit")) }, text = {
+                AlertDialog(onDismissRequest = { dialog = null }, title = { Text(if (editing == null) tr("hosts.manual") else tr("hosts.edit")) }, text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(if (editing == null) tr("pair.instructions") else tr("hosts.edit_hint"))
                         OutlinedTextField(value = host, onValueChange = { host = it }, label = { Text(tr("pair.computer_ip")) }, singleLine = true)
@@ -334,17 +350,33 @@ class MainActivity : ComponentActivity() {
         pairing = true
         scope.launch {
             val result = runCatching { withContext(Dispatchers.IO) {
-                Transport.pair(host, number, DeviceIdentity(), settings.deviceName) { code ->
-                    runBlocking { withContext(Dispatchers.Main) {
-                        verificationCode = code
-                        val pending = CompletableDeferred<Boolean>()
-                        confirmation = pending
-                        try { withTimeout(55_000) { pending.await() } } finally { confirmation = null }
-                    } }
-                }
+                Transport.pair(host, number, DeviceIdentity(), settings.deviceName, ::confirmPairing)
             } }
             pairing = false
             result.onSuccess { (pin, name) -> settings.savePair(host, number, pin, name); refresh(); startSync() }.onFailure { alert(localizedFailure(it, "pair.failed")) }
+        }
+    }
+    private fun pairScanned(invitation: PairingQr) {
+        if (pairing) return
+        dialog = null
+        pairing = true
+        scope.launch {
+            val result = runCatching { withContext(Dispatchers.IO) {
+                Transport.pairQr(invitation, DeviceIdentity(), settings.deviceName, ::confirmPairing)
+            } }
+            pairing = false
+            result.onSuccess { host ->
+                settings.savePair(host.host, invitation.port, host.pin, host.name)
+                refresh(); startSync()
+            }.onFailure { alert(localizedFailure(it, "pair.failed")) }
+        }
+    }
+    private fun confirmPairing(code: String): Boolean = runBlocking {
+        withContext(Dispatchers.Main) {
+            verificationCode = code
+            val pending = CompletableDeferred<Boolean>()
+            confirmation = pending
+            try { withTimeout(55_000) { pending.await() } } finally { confirmation = null }
         }
     }
     private fun saveProfiles(profiles: List<HostProfile>) {
